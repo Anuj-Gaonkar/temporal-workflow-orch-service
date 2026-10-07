@@ -1,0 +1,6 @@
+# Dev profile (the default): everything runs in minutes so a whole campaign can be watched in one sitting.
+orch:
+  timing:
+    # One campaign "day" lasts 3 minutes: Day 1 starts 3 minutes after the trigger, the 15-day window lasts 48 minutes,
+    # and every whole-day wait or feedback timeout in the YAML (1d, 2d) is scaled the same way.
+    day-length: 3m

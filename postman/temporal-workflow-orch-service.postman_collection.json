@@ -1,0 +1,848 @@
+{
+  "info": {
+    "name": "temporal-workflow-orch-service",
+    "description": "Phase 2. Run top to bottom against the running app (see README). Feedback requests must be sent after the contact they answer (Day 1 10:00 IST, or after the shortened demo day). The duplicate/409 request needs the VOICE workflow still running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "List definitions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/workflow-definitions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflow-definitions"
+          ]
+        },
+        "description": "Lists the loaded YAML definitions (name, description, step ids)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"OUTREACH_DEFAULT is loaded\", function () { pm.expect(pm.response.json().map(d => d.name)).to.include(pm.collectionVariables.get(\"definition\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get customer (VOICE customer)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{voiceCustomerId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "{{voiceCustomerId}}"
+          ]
+        },
+        "description": "Read-only view of a VOICE customer row."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"channel is VOICE\", function () { pm.expect(pm.response.json().initialChannel).to.eql(\"VOICE\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get customer (WHATSAPP customer)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{whatsappCustomerId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "{{whatsappCustomerId}}"
+          ]
+        },
+        "description": "Read-only view of a WHATSAPP customer row."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"channel is WHATSAPP\", function () { pm.expect(pm.response.json().initialChannel).to.eql(\"WHATSAPP\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, VOICE customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{voiceCustomerId}}\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Starts OUTREACH_DEFAULT for a VOICE customer: call now, message after the delay. Run this before the duplicate request."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });",
+              "pm.test(\"workflow id scheme\", function () { pm.expect(pm.response.json().workflowId).to.eql(pm.collectionVariables.get(\"definition\") + \"-\" + pm.collectionVariables.get(\"voiceCustomerId\")); });\npm.collectionVariables.set(\"voiceWorkflowId\", pm.response.json().workflowId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, WHATSAPP customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{whatsappCustomerId}}\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Starts OUTREACH_DEFAULT for a WHATSAPP customer: message now, second message after the delay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });",
+              "pm.collectionVariables.set(\"whatsappWorkflowId\", pm.response.json().workflowId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, duplicate (expects 409)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{voiceCustomerId}}\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Needs the VOICE workflow from the request above to still be running (true for 30 minutes with the shipped YAML). Expects 409."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 409\", function () { pm.response.to.have.status(409); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, unknown customer (expects 404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{unknownCustomerId}}\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Customer id that is not in orch.customers. Expects 404 CUSTOMER_NOT_FOUND."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"code\", function () { pm.expect(pm.response.json().code).to.eql(\"CUSTOMER_NOT_FOUND\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, unknown definition (expects 404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{voiceCustomerId}}\",\n  \"definition\": \"NO_SUCH_DEFINITION\"\n}"
+        },
+        "description": "Definition name that is not loaded. Expects 404 DEFINITION_NOT_FOUND."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"code\", function () { pm.expect(pm.response.json().code).to.eql(\"DEFINITION_NOT_FOUND\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, blank customerId (expects 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"\",\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "description": "Blank customerId. Expects 400 BAD_REQUEST."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 400\", function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, all customers",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"definition\": \"{{definition}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start-all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start-all"
+          ]
+        },
+        "description": "Starts the definition for every customer in orch.customers. Customers whose workflow is still running are reported as ALREADY_RUNNING, not as an error. Run it when no other workflow is running to see every customer STARTED."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });",
+              "pm.test(\"counts add up\", function () { var j = pm.response.json(); pm.expect(j.started + j.alreadyRunning + j.failed).to.eql(j.total); pm.expect(j.failed).to.eql(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Start workflow, all customers, unknown definition (expects 404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"definition\": \"NO_SUCH_DEFINITION\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/workflows/start-all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "start-all"
+          ]
+        },
+        "description": "Expects 404 DEFINITION_NOT_FOUND."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"code\", function () { pm.expect(pm.response.json().code).to.eql(\"DEFINITION_NOT_FOUND\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get workflow status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{voiceWorkflowId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{voiceWorkflowId}}"
+          ]
+        },
+        "description": "Status of the VOICE workflow via describeWorkflowExecution: RUNNING while sleeping, COMPLETED after the delay."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"has a status\", function () { pm.expect(pm.response.json().status).to.be.oneOf([\"RUNNING\",\"COMPLETED\"]); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback: remind me later (2d, WhatsApp)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{definition}}-{{voiceCustomerId}}/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{definition}}-{{voiceCustomerId}}",
+            "feedback"
+          ]
+        },
+        "description": "Customer asks to be reminded in 2 days on WhatsApp. Send after the Day 1 contact.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"REMIND_LATER\",\n  \"remindAfter\": \"2d\",\n  \"channel\": \"WHATSAPP\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });",
+              "pm.test(\"normalised\", function () { pm.expect(pm.response.json().type).to.eql(\"REMIND_LATER\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback: remind me later (no details, defaults apply)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{definition}}-{{voiceCustomerId}}/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{definition}}-{{voiceCustomerId}}",
+            "feedback"
+          ]
+        },
+        "description": "No time and no channel: the YAML defaults (1 day, DB channel) apply, or the earlier values if the customer gave them before.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"REMIND_LATER\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback: inconclusive",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{definition}}-{{voiceCustomerId}}/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{definition}}-{{voiceCustomerId}}",
+            "feedback"
+          ]
+        },
+        "description": "Customer answered but nothing concrete: the next contact is on the channel of the last contact.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"INCONCLUSIVE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback: no response",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{definition}}-{{voiceCustomerId}}/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{definition}}-{{voiceCustomerId}}",
+            "feedback"
+          ]
+        },
+        "description": "Explicit no-response (a feedback timeout does the same without this call).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"NO_RESPONSE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback: positive",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{definition}}-{{voiceCustomerId}}/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{definition}}-{{voiceCustomerId}}",
+            "feedback"
+          ]
+        },
+        "description": "Customer will complete the process: thank-you SMS, workflow ends.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"POSITIVE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 202\", function () { pm.response.to.have.status(202); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback: unknown type (expects 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{definition}}-{{voiceCustomerId}}/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{definition}}-{{voiceCustomerId}}",
+            "feedback"
+          ]
+        },
+        "description": "Rejected before anything is sent.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"MAYBE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 400\", function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback: remindAfter with wrong type (expects 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{definition}}-{{voiceCustomerId}}/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{definition}}-{{voiceCustomerId}}",
+            "feedback"
+          ]
+        },
+        "description": "remindAfter and channel are only allowed with REMIND_LATER.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"POSITIVE\",\n  \"remindAfter\": \"2d\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 400\", function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback: unknown workflow (expects 404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/workflows/{{definition}}-C0000/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflows",
+            "{{definition}}-C0000",
+            "feedback"
+          ]
+        },
+        "description": "No such workflow.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"POSITIVE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"code\", function () { pm.expect(pm.response.json().code).to.eql(\"WORKFLOW_NOT_FOUND\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reload definitions",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/workflow-definitions/reload",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "workflow-definitions",
+            "reload"
+          ]
+        },
+        "description": "Rescans the YAML folder now. Valid files go live for new starts; a broken file is listed under errors and keeps its old version."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"no errors\", function () { pm.expect(pm.response.json().errors).to.eql([]); });"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "definition",
+      "value": "OUTREACH_DEFAULT"
+    },
+    {
+      "key": "voiceCustomerId",
+      "value": "C1001"
+    },
+    {
+      "key": "whatsappCustomerId",
+      "value": "C1002"
+    },
+    {
+      "key": "unknownCustomerId",
+      "value": "C0000"
+    },
+    {
+      "key": "voiceWorkflowId",
+      "value": "OUTREACH_DEFAULT-C1001"
+    },
+    {
+      "key": "whatsappWorkflowId",
+      "value": "OUTREACH_DEFAULT-C1002"
+    }
+  ]
+}

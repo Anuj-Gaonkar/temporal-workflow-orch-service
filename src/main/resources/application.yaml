@@ -1,0 +1,54 @@
+spring:
+  profiles:
+    default: dev   # dev (minutes) unless SPRING_PROFILES_ACTIVE=prod (real days)
+  application:
+    name: temporal-workflow-orch-service
+
+  # Temporal server from docker-compose.yml in this project (host port 7235; other stacks use 7233 and 7234).
+  temporal:
+    connection:
+      target: ${TEMPORAL_TARGET:127.0.0.1:7235}
+    namespace: default
+    workers-auto-discovery:
+      packages:
+        - com.hdfc.cern.workfloworch
+
+  # Shared Postgres (../docker-compose.yml, host port 5437), database cern_v2, own schema orch. The service only READS orch.customers;
+  # the schema and default customers are created by hand from db/*.sql.
+  datasource:
+    url: jdbc:postgresql://localhost:5437/cern_v2
+    username: ${APP_DB_USER:cern}
+    password: ${APP_DB_PASSWORD:cern}
+
+server:
+  port: ${SERVER_PORT:8196}   # flows service is 8182; older stacks use 8082, 8083, 8096
+
+orch:
+  # whatsapp-flows-service: how WHATSAPP contacts are really sent (plain HTTP, no auth).
+  whatsapp:
+    base-url: ${WHATSAPP_FLOWS_BASE_URL:http://localhost:8182}
+  # Folder of *.yaml workflow definitions. Read at startup (a broken file stops the app), then rescanned
+  # every definitions-reload-seconds (a broken edit is reported and the old version stays live).
+  definitions-path: ${ORCH_DEFINITIONS_PATH:./workflow-definitions}
+  definitions-hot-reload: ${ORCH_DEFINITIONS_HOT_RELOAD:true}
+  definitions-reload-seconds: ${ORCH_DEFINITIONS_RELOAD_SECONDS:10}
+  logging:
+    # true = log only the readable communication lines (sent messages, customer replies, campaign summary)
+    # plus warnings and errors; hides the event=... timing lines, the framework output and the rest.
+    # Keep it false for load tests: the report script reads the event=... lines.
+    communication-only: ${ORCH_LOG_COMMUNICATION_ONLY:false}
+
+# ISO-8601 timestamp with milliseconds in IST (+05:30), thread, logger, and the MDC ids set by API/activity code.
+# Console and rolling file use the same pattern so the load scripts can parse either.
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,Asia/Kolkata} %-5level [%thread] %logger{36} [wf=%X{workflowId:-} cust=%X{customerId:-}] - %msg%n"
+    file: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,Asia/Kolkata} %-5level [%thread] %logger{36} [wf=%X{workflowId:-} cust=%X{customerId:-}] - %msg%n"
+  file:
+    name: logs/temporal-workflow-orch-service.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+  level:
+    com.hdfc.cern.workfloworch: INFO

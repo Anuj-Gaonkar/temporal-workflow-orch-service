@@ -1,0 +1,154 @@
+name: OUTREACH_DEFAULT
+description: Campaign outreach. Day 0 = trigger day; first contact on Day 1 on the customer's DB channel; then feedback decides the next contact. Nothing happens after Day 15.
+start: wait-day-1
+
+# The campaign window. Day 0 is the day the workflow is triggered. Contacts happen on Day 1 .. Day 15 at sendHour
+# (IST) and never after: a reminder that would land after the end of Day 15 is dropped and the workflow ends.
+campaign:
+  maxDays: 15
+  timezone: Asia/Kolkata
+  sendHour: 10
+  # dayLength: 2m     # demo / load test only: one "day" lasts 2 minutes. Leave out for real calendar days.
+
+steps:
+  # --- Day 1: first contact, on the channel stored in the DB ---
+  - id: wait-day-1
+    type: delay
+    untilDay: 1
+    next: first-contact
+
+  - id: first-contact
+    type: contact
+    channel: customer.initialChannel
+    flow: AMB_REMINDER_RADIO   # a WHATSAPP customer gets this WhatsApp Flow (text below is its message body); other channels ignore it
+    text: "Hello, this is HDFC Bank. We are reaching out about your account. Please let us know how you would like to proceed."
+    next: await-first
+
+  # Feedback arrives via POST /workflows/{id}/feedback (whatsapp-flows-service sends it when the customer answers the Flow).
+  # No feedback within the timeout counts as NO_RESPONSE. In dev a "1d" timeout lasts one shortened day.
+  - id: await-first
+    type: await-feedback
+    timeout: 2h
+    next: route-first
+
+  - id: route-first
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: reset-reminders
+      INCONCLUSIVE: reset-reminders-inconclusive
+      NO_RESPONSE: count-unanswered-contact
+
+  # --- Positive: thank-you SMS, then done ---
+  - id: thank-you
+    type: contact
+    channel: SMS
+    text: "Thank you from HDFC Bank. We have noted that you will complete the process."
+    next: end
+
+  # --- No response: try again on the DB channel. The first contact plus 2 unanswered retries (3 contacts with no
+  # answer in a row) end the campaign with one final SMS. Any reaction from the customer resets the count. ---
+  - id: count-unanswered-contact
+    type: count
+    counter: unanswered
+    limit: 3
+    whenReached: wait-final-contact
+    next: wait-retry
+
+  - id: wait-final-contact
+    type: delay
+    duration: 1d
+    next: final-reminder
+
+  - id: wait-retry
+    type: delay
+    duration: 1d
+    next: retry-contact
+
+  - id: retry-contact
+    type: contact
+    channel: customer.initialChannel
+    flow: AMB_REMINDER_RADIO   # a WHATSAPP customer gets this WhatsApp Flow (text below is its message body); other channels ignore it
+    text: "Hello again from HDFC Bank. We could not reach you earlier. Please reply or take our call."
+    next: await-first
+
+  # --- Responded but nothing concrete: talk to them again on the channel they answered on ---
+  - id: wait-follow-up
+    type: delay
+    duration: 1d
+    next: follow-up-contact
+
+  - id: follow-up-contact
+    type: contact
+    channel: last.channel
+    flow: AMB_REMINDER_RADIO   # a WHATSAPP customer gets this WhatsApp Flow (text below is its message body); other channels ignore it
+    text: "Following up from HDFC Bank on our last conversation. Please let us know how you would like to proceed."
+    next: await-first
+
+  # --- Reminder: the customer's own time and channel win; otherwise 1 day on the DB channel ---
+  - id: wait-reminder
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: reminder-contact
+
+  - id: reminder-contact
+    type: contact
+    channel: reminder.channel
+    defaultChannel: customer.initialChannel
+    text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
+    next: await-reminder
+
+  # No response to a reminder: remind again after the same time on the same channel the customer asked for
+# (at most 2 unanswered reminders, then one final SMS reminder; see count-unanswered-reminder).
+  - id: await-reminder
+    type: await-feedback
+    timeout: 2h
+    next: route-reminder
+
+  - id: route-reminder
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: reset-reminders
+      INCONCLUSIVE: reset-reminders-inconclusive
+      NO_RESPONSE: count-unanswered-reminder
+
+  # The customer reacted (asked for a reminder, or answered): the count of unanswered contacts starts again.
+  - id: reset-reminders
+    type: count
+    counter: unanswered
+    reset: true
+    next: wait-reminder
+
+  - id: reset-reminders-inconclusive
+    type: count
+    counter: unanswered
+    reset: true
+    next: wait-follow-up
+
+  # An unanswered reminder. After 2 in a row: one more wait (same time as the reminders), one final SMS reminder, done.
+  # (`unanswered` counts contacts with no answer in a row, on both paths.)
+  - id: count-unanswered-reminder
+    type: count
+    counter: unanswered
+    limit: 2
+    whenReached: wait-final-reminder
+    next: wait-reminder
+
+  - id: wait-final-reminder
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: final-reminder
+
+  - id: final-reminder
+    type: contact
+    channel: SMS
+    text: "Final reminder from HDFC Bank. We have not heard back from you. Please contact us if you would like to proceed."
+    next: end
+
+  - id: end
+    type: end

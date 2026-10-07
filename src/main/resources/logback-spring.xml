@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spring Boot's own console and file appenders (patterns, file name and rolling still come from the
+  logging.* settings in application.yml), plus one extra file for the readable conversation lines.
+  Everything logged to the logger "conversation" (ConversationLog) goes to the main log as before AND
+  to logs/conversation.log, where each line is just the text, with its own date and time inside.
+
+  orch.logging.communication-only (application.yml, default false): when true only the conversation
+  lines, warnings and errors are logged (CommunicationOnlyFilter).
+-->
+<configuration>
+	<springProperty scope="context" name="COMMUNICATION_ONLY" source="orch.logging.communication-only" defaultValue="false"/>
+	<turboFilter class="com.hdfc.cern.workfloworch.logging.CommunicationOnlyFilter">
+		<enabled>${COMMUNICATION_ONLY}</enabled>
+	</turboFilter>
+
+	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+	<include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+	<include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
+
+	<appender name="CONVERSATION_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>logs/conversation.log</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+			<fileNamePattern>logs/conversation.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+			<maxFileSize>10MB</maxFileSize>
+			<maxHistory>7</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<pattern>%msg%n</pattern>
+		</encoder>
+	</appender>
+
+	<logger name="conversation" level="INFO" additivity="true">
+		<appender-ref ref="CONVERSATION_FILE"/>
+	</logger>
+
+	<root level="INFO">
+		<appender-ref ref="CONSOLE"/>
+		<appender-ref ref="FILE"/>
+	</root>
+</configuration>

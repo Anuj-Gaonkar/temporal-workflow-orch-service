@@ -1,0 +1,57 @@
+name: cern-v2-orch
+
+# Temporal stack of temporal-workflow-orch-service. Every host port differs on purpose from the older stacks
+# (Chat-Bot-V3 root: 7233/8088/5434; cern-temporal-workflow-orch-service: 7234/8089/5435/5436) so all can run together:
+#   Temporal gRPC  -> localhost:7235
+#   Temporal UI    -> http://localhost:8190
+#   Temporal's own Postgres (inspection only, localhost only) -> 127.0.0.1:5439
+# The app's own data (orch.customers) is NOT here: it lives in the shared Postgres of ../docker-compose.yml
+# (host port 5437, database cern_v2, schema orch). Load it by hand with scripts/load-data.sh (see README).
+services:
+
+  # --- Temporal server + its own, fully separate Postgres (never shared with app data) ---
+  temporal-postgres:
+    image: postgres:16
+    container_name: cern-v2-orch-temporal-postgres
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    ports:
+      - "127.0.0.1:5439:5432" # inspection only (DBeaver); Temporal itself uses the internal network
+    volumes:
+      - temporal-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: cern-v2-orch-temporal
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-postgres
+      DEFAULT_NAMESPACE: default
+    ports:
+      - "7235:7233" # gRPC frontend - what the app's client/worker connects to
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: cern-v2-orch-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8190:8080" # http://localhost:8190
+
+volumes:
+  temporal-postgres-data:

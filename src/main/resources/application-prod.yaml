@@ -1,0 +1,5 @@
+# Prod profile (SPRING_PROFILES_ACTIVE=prod): real calendar days. Day 1 is the day after the trigger at the YAML's
+# sendHour (IST), waits of 1d / 3d are real days, the feedback timeout of 1d is a real day.
+orch:
+  timing:
+    day-length: ""
