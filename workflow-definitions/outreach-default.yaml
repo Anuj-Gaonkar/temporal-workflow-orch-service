@@ -8,7 +8,7 @@ campaign:
   maxDays: 15
   timezone: Asia/Kolkata
   sendHour: 10
-  # dayLength: 2m     # demo / load test only: one "day" lasts 2 minutes. Leave out for real calendar days.
+  dayLength: 2m     # demo / load test only: one "day" lasts 2 minutes. Leave out for real calendar days.
 
 steps:
   # --- Day 1: first contact, on the channel stored in the DB ---

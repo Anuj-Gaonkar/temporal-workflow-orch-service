@@ -1,0 +1,326 @@
+name: OUTREACH_20_DAY
+description: Multi-channel outreach over 20 days. Day 1 WhatsApp, Day 4 WhatsApp reminder, Day 7 email, Day 10 SMS, Day 15 relationship manager call, Day 20 final notice on WhatsApp and SMS. After every contact the customer's answer (feedback) decides what happens next. Nothing happens after Day 20.
+start: wait-day-1
+
+# Day 0 = the day the workflow is triggered. Contacts happen on the days below at sendHour (IST) and never after Day 20.
+# Do not set dayLength here: the Spring profile does that for demos (3 minutes per day in dev).
+campaign:
+  maxDays: 20
+  timezone: Asia/Kolkata
+  sendHour: 10
+
+# How feedback works in this file
+#  - After each contact there is an await-feedback that lasts until the next scheduled contact, so the customer can answer at any time in between.
+#  - POSITIVE      -> thank-you SMS and the campaign ends.
+#  - REMIND_LATER  -> wait the time the customer asked for (1 day if none), send one reminder on the channel they asked for
+#                     (the channel of the last contact if none), give them 1 day to answer, then carry on with the next scheduled contact.
+#                     Another POSITIVE during that time ends the campaign.
+#  - INCONCLUSIVE / NO_RESPONSE -> carry on with the next scheduled contact.
+#  - Feedback sent while no contact is waiting for it is dropped, so send it after the contact it answers.
+#  - A reminder that would land after the end of Day 20 is dropped and the campaign ends.
+
+steps:
+
+  # --- Day 1: WhatsApp message 1 (with the answer Flow) ---
+  - id: wait-day-1
+    type: delay
+    untilDay: 1
+    next: contact-day1
+
+  - id: contact-day1
+    type: contact
+    channel: WHATSAPP
+    flow: AMB_REMINDER_RADIO   # the customer answers through this WhatsApp Flow; the text below is its message body
+    text: "Hello, this is HDFC Bank. We are reaching out about your account. Please let us know how you would like to proceed."
+    next: await-day1
+
+  - id: await-day1
+    type: await-feedback
+    timeout: 3d   # until the next scheduled contact
+    next: route-day1
+
+  - id: route-day1
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: wait-remind-day1
+      INCONCLUSIVE: wait-day-4
+      NO_RESPONSE: wait-day-4
+
+  # Customer asked to be reminded after the Day 1 contact
+  - id: wait-remind-day1
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: remind-day1
+
+  - id: remind-day1
+    type: contact
+    channel: reminder.channel
+    defaultChannel: last.channel
+    text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
+    next: await-remind-day1
+
+  - id: await-remind-day1
+    type: await-feedback
+    timeout: 1d
+    next: route-remind-day1
+
+  - id: route-remind-day1
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+    default: wait-day-4
+
+  # --- Day 4: WhatsApp reminder (with the answer Flow) ---
+  - id: wait-day-4
+    type: delay
+    untilDay: 4
+    next: contact-day4
+
+  - id: contact-day4
+    type: contact
+    channel: WHATSAPP
+    flow: AMB_REMINDER_RADIO   # the customer answers through this WhatsApp Flow; the text below is its message body
+    text: "Hello again from HDFC Bank. This is a reminder about your account. Please let us know how you would like to proceed."
+    next: await-day4
+
+  - id: await-day4
+    type: await-feedback
+    timeout: 3d   # until the next scheduled contact
+    next: route-day4
+
+  - id: route-day4
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: wait-remind-day4
+      INCONCLUSIVE: wait-day-7
+      NO_RESPONSE: wait-day-7
+
+  # Customer asked to be reminded after the Day 4 contact
+  - id: wait-remind-day4
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: remind-day4
+
+  - id: remind-day4
+    type: contact
+    channel: reminder.channel
+    defaultChannel: last.channel
+    text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
+    next: await-remind-day4
+
+  - id: await-remind-day4
+    type: await-feedback
+    timeout: 1d
+    next: route-remind-day4
+
+  - id: route-remind-day4
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+    default: wait-day-7
+
+  # --- Day 7: email notification ---
+  - id: wait-day-7
+    type: delay
+    untilDay: 7
+    next: contact-day7
+
+  - id: contact-day7
+    type: contact
+    channel: EMAIL
+    text: "HDFC Bank: an important notification about your account. Please reply or contact us to complete the pending process."
+    next: await-day7
+
+  - id: await-day7
+    type: await-feedback
+    timeout: 3d   # until the next scheduled contact
+    next: route-day7
+
+  - id: route-day7
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: wait-remind-day7
+      INCONCLUSIVE: wait-day-10
+      NO_RESPONSE: wait-day-10
+
+  # Customer asked to be reminded after the Day 7 contact
+  - id: wait-remind-day7
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: remind-day7
+
+  - id: remind-day7
+    type: contact
+    channel: reminder.channel
+    defaultChannel: last.channel
+    text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
+    next: await-remind-day7
+
+  - id: await-remind-day7
+    type: await-feedback
+    timeout: 1d
+    next: route-remind-day7
+
+  - id: route-remind-day7
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+    default: wait-day-10
+
+  # --- Day 10: SMS reminder ---
+  - id: wait-day-10
+    type: delay
+    untilDay: 10
+    next: contact-day10
+
+  - id: contact-day10
+    type: contact
+    channel: SMS
+    text: "HDFC Bank reminder: your account process is still pending. Please contact us or reply to complete it."
+    next: await-day10
+
+  - id: await-day10
+    type: await-feedback
+    timeout: 5d   # until the next scheduled contact
+    next: route-day10
+
+  - id: route-day10
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: wait-remind-day10
+      INCONCLUSIVE: wait-day-15
+      NO_RESPONSE: wait-day-15
+
+  # Customer asked to be reminded after the Day 10 contact
+  - id: wait-remind-day10
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: remind-day10
+
+  - id: remind-day10
+    type: contact
+    channel: reminder.channel
+    defaultChannel: last.channel
+    text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
+    next: await-remind-day10
+
+  - id: await-remind-day10
+    type: await-feedback
+    timeout: 1d
+    next: route-remind-day10
+
+  - id: route-remind-day10
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+    default: wait-day-15
+
+  # --- Day 15: relationship manager call / outreach ---
+  - id: wait-day-15
+    type: delay
+    untilDay: 15
+    next: contact-day15
+
+  - id: contact-day15
+    type: contact
+    channel: VOICE
+    text: "Relationship Manager call script: introduce yourself from HDFC Bank, confirm the pending process on the customer's account and agree the next step."
+    next: await-day15
+
+  - id: await-day15
+    type: await-feedback
+    timeout: 5d   # until the next scheduled contact
+    next: route-day15
+
+  - id: route-day15
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+      REMIND_LATER: wait-remind-day15
+      INCONCLUSIVE: wait-day-20
+      NO_RESPONSE: wait-day-20
+
+  # Customer asked to be reminded after the Day 15 contact
+  - id: wait-remind-day15
+    type: delay
+    fromVar: reminder.after
+    defaultDuration: 1d
+    next: remind-day15
+
+  - id: remind-day15
+    type: contact
+    channel: reminder.channel
+    defaultChannel: last.channel
+    text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
+    next: await-remind-day15
+
+  - id: await-remind-day15
+    type: await-feedback
+    timeout: 1d
+    next: route-remind-day15
+
+  - id: route-remind-day15
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+    default: wait-day-20
+
+  # --- Day 20: final notice on WhatsApp and SMS ---
+  - id: wait-day-20
+    type: delay
+    untilDay: 20
+    next: final-notice-whatsapp
+
+  - id: final-notice-whatsapp
+    type: contact
+    channel: WHATSAPP
+    flow: AMB_REMINDER_RADIO   # the customer can still answer through the Flow
+    text: "Final notice from HDFC Bank. We have not been able to complete the pending process on your account. Please respond today."
+    next: final-notice-sms
+
+  - id: final-notice-sms
+    type: contact
+    channel: SMS
+    text: "Final notice from HDFC Bank: the pending process on your account closes today. Please contact us immediately."
+    next: await-final
+
+  # Day 20 is the last day, so this wait is cut at the end of the day and the campaign then ends normally.
+  - id: await-final
+    type: await-feedback
+    timeout: 1d
+    next: route-final
+
+  - id: route-final
+    type: switch
+    on: feedback.type
+    cases:
+      POSITIVE: thank-you
+    default: end
+
+  # --- Positive answer at any point: thank-you SMS, then done ---
+  - id: thank-you
+    type: contact
+    channel: SMS
+    text: "Thank you from HDFC Bank. We have noted that you will complete the process."
+    next: end
+
+  - id: end
+    type: end

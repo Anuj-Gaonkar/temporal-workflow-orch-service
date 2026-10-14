@@ -55,7 +55,7 @@ Nothing else is accepted: no expressions, no operators.
 | `last.channel` | The channel of the last `contact`. This is the channel the customer responded on. |
 
 A path with no value is empty: `switch` falls to `default` (or fails); `delay.fromVar` uses `defaultDuration`; `contact.channel` uses `defaultChannel`.
-Where a channel is expected you write either a literal (`VOICE`, `WHATSAPP`, `SMS`) or one of the channel paths (`customer.initialChannel`, `feedback.channel`, `reminder.channel`, `last.channel`).
+Where a channel is expected you write either a literal (`VOICE`, `WHATSAPP`, `SMS`, `EMAIL`; EMAIL and SMS are only logged for now) or one of the channel paths (`customer.initialChannel`, `feedback.channel`, `reminder.channel`, `last.channel`).
 Where a duration is expected via `fromVar`: `reminder.after` or `feedback.remindAfter`.
 
 ### Feedback types (since phase 2)
