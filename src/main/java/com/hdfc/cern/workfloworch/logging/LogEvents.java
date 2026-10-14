@@ -20,6 +20,8 @@ public final class LogEvents {
 	public static final String API_FEEDBACK_RECEIVED = "API_FEEDBACK_RECEIVED";
 	public static final String API_FEEDBACK_DONE = "API_FEEDBACK_DONE";
 	public static final String API_FEEDBACK_REJECTED = "API_FEEDBACK_REJECTED";
+	public static final String API_TERMINATE_DONE = "API_TERMINATE_DONE";
+	public static final String API_TERMINATE_ALL_DONE = "API_TERMINATE_ALL_DONE";
 	public static final String WF_FEEDBACK = "WF_FEEDBACK";
 	public static final String WF_FEEDBACK_DROPPED = "WF_FEEDBACK_DROPPED";
 	public static final String WF_COUNTER = "WF_COUNTER";

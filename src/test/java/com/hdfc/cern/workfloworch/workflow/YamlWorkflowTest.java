@@ -95,11 +95,12 @@ class YamlWorkflowTest {
 	}
 
 	@Test
-	void voiceCustomerNeverGetsAWhatsAppMessageFromTheFirstContact() {
+	void voiceCustomerGetsACallSentPlaceholderOnWhatsAppAndNoFlowFromTheFirstContact() {
 		YamlWorkflow wf = start(VOICE);
 		awaitContacts(1);
 		assertThat(activities.flows).isEmpty();
-		assertThat(activities.texts).isEmpty();
+		assertThat(activities.texts).hasSize(1);
+		assertThat(activities.texts.get(0)).startsWith("910000000001:Call sent: Hello, this is HDFC Bank");
 		send(wf, "POSITIVE", null, null);
 		finish();
 	}

@@ -8,6 +8,9 @@ import com.hdfc.cern.workfloworch.starter.FeedbackResult;
 import com.hdfc.cern.workfloworch.starter.FeedbackService;
 import com.hdfc.cern.workfloworch.starter.StartAllResult;
 import com.hdfc.cern.workfloworch.starter.StartResult;
+import com.hdfc.cern.workfloworch.starter.TerminateAllResult;
+import com.hdfc.cern.workfloworch.starter.TerminateResult;
+import com.hdfc.cern.workfloworch.starter.TerminationService;
 import com.hdfc.cern.workfloworch.starter.WorkflowStarterService;
 import io.temporal.api.workflow.v1.WorkflowExecutionInfo;
 import io.temporal.api.workflowservice.v1.DescribeWorkflowExecutionRequest;
@@ -33,14 +36,17 @@ public class OrchController {
 
 	private final WorkflowStarterService starter;
 	private final FeedbackService feedback;
+	private final TerminationService termination;
 	private final DefinitionLoader definitions;
 	private final CustomerRepository customers;
 	private final WorkflowClient workflowClient;
 
-	public OrchController(WorkflowStarterService starter, FeedbackService feedback, DefinitionLoader definitions, CustomerRepository customers,
+	public OrchController(WorkflowStarterService starter, FeedbackService feedback, TerminationService termination, DefinitionLoader definitions,
+			CustomerRepository customers,
 			WorkflowClient workflowClient) {
 		this.starter = starter;
 		this.feedback = feedback;
+		this.termination = termination;
 		this.definitions = definitions;
 		this.customers = customers;
 		this.workflowClient = workflowClient;
@@ -74,6 +80,21 @@ public class OrchController {
 	@PostMapping("/workflows/start-all")
 	public ResponseEntity<StartAllResult> startAll(@RequestBody StartAllRequest request) {
 		return ResponseEntity.status(HttpStatus.ACCEPTED).body(starter.startAll(request.definition()));
+	}
+
+	/**
+	 * Stops one running workflow. It is not deleted: it stays in Temporal as Terminated with the reason (audit record).
+	 * Optional body {"reason": "..."}; 404 when the workflow is unknown or already finished.
+	 */
+	@PostMapping("/workflows/{workflowId}/terminate")
+	public TerminateResult terminate(@PathVariable String workflowId, @RequestBody(required = false) TerminateRequest request) {
+		return termination.terminate(workflowId, request == null ? null : request.reason());
+	}
+
+	/** Stops every running workflow, or only those of one definition ({"definition": "OUTREACH_20_DAY"}). History is kept. */
+	@PostMapping("/workflows/terminate-all")
+	public TerminateAllResult terminateAll(@RequestBody(required = false) TerminateRequest request) {
+		return termination.terminateAll(request == null ? null : request.definition(), request == null ? null : request.reason());
 	}
 
 	@GetMapping("/workflows/{workflowId}")

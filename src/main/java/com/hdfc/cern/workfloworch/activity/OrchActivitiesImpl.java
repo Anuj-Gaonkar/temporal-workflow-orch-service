@@ -29,9 +29,12 @@ public class OrchActivitiesImpl implements OrchActivities {
 
 	@Override
 	public void executeVoiceCall(ActivityInput input) {
-		run(OrchActivities.EXECUTE_VOICE_CALL, input, () -> conversation.info(ConversationLog.contact(
-				"VOICE", input.customer().customerId(), input.customer().phone(), input.stepId(),
-				System.currentTimeMillis(), param(input, "script"))));
+		run(OrchActivities.EXECUTE_VOICE_CALL, input, () -> {
+			conversation.info(ConversationLog.contact(
+					"VOICE", input.customer().customerId(), input.customer().phone(), input.stepId(),
+					System.currentTimeMillis(), param(input, "script")));
+			deliverOnWhatsApp(input, "VOICE", param(input, "script"));
+		});
 	}
 
 	@Override
@@ -40,25 +43,39 @@ public class OrchActivitiesImpl implements OrchActivities {
 			conversation.info(ConversationLog.contact(
 					param(input, "channel"), input.customer().customerId(), input.customer().phone(), input.stepId(),
 					System.currentTimeMillis(), param(input, "text")));
-			if ("WHATSAPP".equals(param(input, "channel"))) {
-				deliverOnWhatsApp(input);
-			}
+			deliverOnWhatsApp(input, param(input, "channel"), param(input, "text"));
 		});
 	}
 
+	/** Placeholder prefix for the channels simulated on WhatsApp; null for WHATSAPP itself (sent as is). */
+	private static String placeholder(String channel) {
+		return switch (channel == null ? "" : channel) {
+			case "SMS" -> "SMS sent";
+			case "VOICE" -> "Call sent";
+			case "EMAIL" -> "Email SENT";
+			default -> null;
+		};
+	}
+
 	/**
-	 * WhatsApp is the only channel that really leaves this service. A delivery failure (for example Meta
+	 * WhatsApp is the only channel that really leaves this service: SMS, VOICE and EMAIL contacts are simulated by a
+	 * WhatsApp text ("SMS sent: ...", "Call sent: ...", "Email SENT: ..."). A delivery failure (for example Meta
 	 * refusing a message outside the 24 hour window) is logged and the campaign carries on: no retry.
 	 */
-	private void deliverOnWhatsApp(ActivityInput input) {
+	private void deliverOnWhatsApp(ActivityInput input, String channel, String text) {
+		String prefix = placeholder(channel);
+		if (prefix == null && !"WHATSAPP".equals(channel)) {
+			return;
+		}
+		String message = prefix == null ? text : (text == null || text.isBlank() ? prefix : prefix + ": " + text);
 		String waId = input.customer().waId();
-		String flowKey = param(input, "flowKey");
+		String flowKey = prefix == null ? param(input, "flowKey") : null;
 		String workflowId = Activity.getExecutionContext().getInfo().getWorkflowId();
 		try {
 			if (flowKey != null) {
-				whatsApp.sendFlow(waId, flowKey, param(input, "text"), input.customer().customerId(), workflowId);
+				whatsApp.sendFlow(waId, flowKey, message, input.customer().customerId(), workflowId);
 			} else {
-				whatsApp.sendText(waId, param(input, "text"));
+				whatsApp.sendText(waId, message);
 			}
 			log.info(line(LogEvents.ACT_WHATSAPP_SENT, "workflowId", workflowId, "stepId", input.stepId(), "waId", waId,
 					"kind", flowKey != null ? "FLOW:" + flowKey : "TEXT"));
