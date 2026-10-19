@@ -14,10 +14,17 @@ public final class DefinitionValidator {
 			StepDefinition.SWITCH, StepDefinition.ACTIVITY, StepDefinition.DELAY, StepDefinition.CONTACT,
 			StepDefinition.AWAIT_FEEDBACK, StepDefinition.COUNT, StepDefinition.END);
 
+	private static final java.util.regex.Pattern CHANNEL_CODE = java.util.regex.Pattern.compile("[A-Z][A-Z0-9_]*");
+
 	private DefinitionValidator() {
 	}
 
 	public static List<String> validate(WorkflowDefinition def, Set<String> knownActivities) {
+		return validate(def, knownActivities, ContactGuard.parseColumns(ContactGuard.DEFAULT_COLUMNS));
+	}
+
+	/** @param guardColumns the columns a {@code contactGuard} may read (the server's {@code orch.guard.allowed-columns}) */
+	public static List<String> validate(WorkflowDefinition def, Set<String> knownActivities, Set<String> guardColumns) {
 		List<String> errors = new ArrayList<>();
 		if (isBlank(def.getName())) {
 			errors.add("'name' is required");
@@ -51,10 +58,151 @@ public final class DefinitionValidator {
 			}
 		}
 
+		checkChannels(def, errors);
+		checkChannelDefaults(def, byId, errors);
+		checkChannelRules(def, errors);
+		checkContactGuard(def, byId, guardColumns, errors);
+		boolean usesAuto = def.getSteps().stream().anyMatch(s -> s != null && Channels.AUTO.equals(s.getChannel()));
+		if (!usesAuto && (def.getChannelDefaults() != null || def.getChannelRules() != null)) {
+			errors.add("'channelDefaults' / 'channelRules' are defined but no contact step uses 'channel: AUTO'");
+		}
+
 		if (errors.isEmpty()) {
 			checkReachable(def, byId, errors);
 		}
 		return errors;
+	}
+
+	/** contactGuard: an allowed column, an existing contact step to go to, and existing contact steps to leave unchecked. */
+	private static void checkContactGuard(WorkflowDefinition def, Map<String, StepDefinition> byId, Set<String> guardColumns,
+			List<String> errors) {
+		ContactGuard guard = def.getContactGuard();
+		if (guard == null) {
+			return;
+		}
+		if (isBlank(guard.getColumn())) {
+			errors.add("contactGuard: 'column' is required");
+		} else if (!guardColumns.contains(guard.getColumn())) {
+			errors.add("contactGuard: column '" + guard.getColumn() + "' is not allowed (the server allows "
+					+ new java.util.TreeSet<>(guardColumns) + ", see orch.guard.allowed-columns)");
+		}
+		if (isBlank(guard.getOnMet())) {
+			errors.add("contactGuard: 'onMet' is required (the contact step to go to when the flag is true)");
+		} else if (!isContact(byId.get(guard.getOnMet()))) {
+			errors.add("contactGuard: onMet '" + guard.getOnMet() + "' is not a contact step");
+		}
+		if (guard.getExcept() != null) {
+			guard.getExcept().forEach(stepId -> {
+				if (!isContact(byId.get(stepId))) {
+					errors.add("contactGuard: except '" + stepId + "' is not a contact step");
+				}
+			});
+		}
+	}
+
+	private static boolean isContact(StepDefinition step) {
+		return step != null && StepDefinition.CONTACT.equals(step.getType());
+	}
+
+	/** channels: each code is a plain upper-case name and each flip target is another declared channel. */
+	private static void checkChannels(WorkflowDefinition def, List<String> errors) {
+		if (def.getChannels() == null) {
+			return;
+		}
+		if (def.getChannels().isEmpty()) {
+			errors.add("'channels' must list at least one channel (or be left out to get the built-in ones)");
+			return;
+		}
+		Set<String> known = def.knownChannels();
+		def.getChannels().forEach((code, spec) -> {
+			String where = "channels '" + code + "': ";
+			if (code == null || !CHANNEL_CODE.matcher(code).matches()) {
+				errors.add(where + "a channel code is upper-case letters, digits and '_' (for example CHAT_BOT)");
+			} else if (Channels.AUTO.equals(code) || Channels.DB.equals(code)) {
+				errors.add(where + "'" + code + "' is reserved and cannot be a channel");
+			}
+			String flip = spec == null ? null : spec.getFlip();
+			if (flip != null && !known.contains(flip)) {
+				errors.add(where + "flip '" + flip + "' is not a declared channel (use " + new java.util.TreeSet<>(known) + ")");
+			} else if (flip != null && flip.equals(code)) {
+				errors.add(where + "must not flip to itself");
+			}
+		});
+	}
+
+	/** channelDefaults: DB channel (or "*" for every other declared channel) to (contact step id to DB or a channel). */
+	private static void checkChannelDefaults(WorkflowDefinition def, Map<String, StepDefinition> byId, List<String> errors) {
+		if (def.getChannelDefaults() == null) {
+			return;
+		}
+		Set<String> known = def.knownChannels();
+		def.getChannelDefaults().forEach((dbChannel, perStep) -> {
+			String where = "channelDefaults '" + dbChannel + "': ";
+			if (!Channels.FALLBACK_BLOCK.equals(dbChannel) && !known.contains(dbChannel)) {
+				errors.add("channelDefaults: '" + dbChannel + "' is not a channel declared for this definition (use "
+						+ new java.util.TreeSet<>(known) + " or \"" + Channels.FALLBACK_BLOCK + "\")");
+			}
+			if (perStep == null || perStep.isEmpty()) {
+				errors.add(where + "needs at least one contact step");
+				return;
+			}
+			perStep.forEach((stepId, channel) -> {
+				StepDefinition step = byId.get(stepId);
+				if (step == null || !StepDefinition.CONTACT.equals(step.getType())) {
+					errors.add(where + "'" + stepId + "' is not a contact step");
+				} else if (!Channels.AUTO.equals(step.getChannel())) {
+					errors.add(where + "step '" + stepId + "' must use 'channel: AUTO' to take a default");
+				}
+				if (!Channels.DB.equals(channel) && !known.contains(channel)) {
+					errors.add(where + "bad channel '" + channel + "' for '" + stepId + "' (use DB or "
+							+ new java.util.TreeSet<>(known) + ")");
+				}
+			});
+		});
+	}
+
+	/** channelRules: feedback type to action; flip: channel to channel. */
+	private static void checkChannelRules(WorkflowDefinition def, List<String> errors) {
+		ChannelRules rules = def.getChannelRules();
+		if (rules == null) {
+			return;
+		}
+		Set<String> known = def.knownChannels();
+		if (rules.getOnFeedback() != null) {
+			rules.getOnFeedback().forEach((type, action) -> {
+				String where = "channelRules.onFeedback '" + type + "': ";
+				if (!FeedbackTypes.ALL.contains(type)) {
+					errors.add(where + "not a feedback type (use " + new java.util.TreeSet<>(FeedbackTypes.ALL) + ")");
+				} else if (action == null || !(ChannelActions.ALL.contains(action) || known.contains(action))) {
+					errors.add(where + "bad action '" + action + "' (use " + new java.util.TreeSet<>(ChannelActions.ALL)
+							+ " or a channel " + new java.util.TreeSet<>(known) + ")");
+				} else if (ChannelActions.DEFAULT.equals(action) && FeedbackTypes.REMIND_LATER.equals(type)) {
+					errors.add(where + "DEFAULT is not allowed (the next contact is a reminder, not a scheduled one)");
+				} else if (ChannelActions.REQUESTED.equals(action) && !FeedbackTypes.REMIND_LATER.equals(type)) {
+					errors.add(where + "REQUESTED only makes sense for REMIND_LATER (only a reminder request names a channel)");
+				}
+			});
+		}
+		if (rules.getFlip() != null) {
+			rules.getFlip().forEach((from, to) -> {
+				if (!known.contains(from) || to == null || !known.contains(to)) {
+					errors.add("channelRules.flip: '" + from + ": " + to + "' must map a channel to a channel (use "
+							+ new java.util.TreeSet<>(known) + ")");
+				} else if (from.equals(to)) {
+					errors.add("channelRules.flip: '" + from + "' must not flip to itself");
+				}
+			});
+		}
+		boolean usesFlip = rules.getOnFeedback() != null && rules.getOnFeedback().containsValue(ChannelActions.FLIP);
+		if (usesFlip) {
+			for (String channel : new java.util.TreeSet<>(known)) {
+				boolean overridden = rules.getFlip() != null && rules.getFlip().get(channel) != null;
+				if (!overridden && def.flipOf(channel) == null) {
+					errors.add("channelRules uses FLIP but channel '" + channel
+							+ "' has no flip target (set 'flip' under channels or an entry in channelRules.flip)");
+				}
+			}
+		}
 	}
 
 	private static void checkCampaign(Campaign campaign, List<String> errors) {
@@ -127,8 +275,10 @@ public final class DefinitionValidator {
 				checkNext(where, step, byId, errors);
 			}
 			case StepDefinition.CONTACT -> {
-				checkChannel(where, "channel", step.getChannel(), true, errors);
-				checkChannel(where, "defaultChannel", step.getDefaultChannel(), false, errors);
+				if (!Channels.AUTO.equals(step.getChannel())) {
+					checkChannel(where, "channel", step.getChannel(), true, def.knownChannels(), errors);
+				}
+				checkChannel(where, "defaultChannel", step.getDefaultChannel(), false, def.knownChannels(), errors);
 				if (isBlank(step.getText())) {
 					errors.add(where + "contact needs 'text'");
 				}
@@ -212,16 +362,17 @@ public final class DefinitionValidator {
 		}
 	}
 
-	/** A channel is a literal (VOICE, WHATSAPP, SMS) or a path that holds one (customer.initialChannel, reminder.channel, ...). */
-	private static void checkChannel(String where, String field, String value, boolean required, List<String> errors) {
+	/** A channel is a declared literal (VOICE, WHATSAPP, SMS, ...) or a path that holds one (customer.initialChannel, reminder.channel, ...). */
+	private static void checkChannel(String where, String field, String value, boolean required, Set<String> known,
+			List<String> errors) {
 		if (isBlank(value)) {
 			if (required) {
 				errors.add(where + "contact needs '" + field + "'");
 			}
 			return;
 		}
-		if (!Channels.ALL.contains(value) && !RunPaths.CHANNEL_PATHS.contains(value)) {
-			errors.add(where + "bad '" + field + "' '" + value + "' (use " + new java.util.TreeSet<>(Channels.ALL)
+		if (!known.contains(value) && !RunPaths.CHANNEL_PATHS.contains(value)) {
+			errors.add(where + "bad '" + field + "' '" + value + "' (use " + new java.util.TreeSet<>(known)
 					+ " or a path: " + new java.util.TreeSet<>(RunPaths.CHANNEL_PATHS) + ")");
 		}
 	}
@@ -247,6 +398,9 @@ public final class DefinitionValidator {
 		Set<String> seen = new HashSet<>();
 		java.util.ArrayDeque<String> todo = new java.util.ArrayDeque<>();
 		todo.add(def.getStart());
+		if (def.getContactGuard() != null && !isBlank(def.getContactGuard().getOnMet())) {
+			todo.add(def.getContactGuard().getOnMet()); // reached through the guard, not through a next
+		}
 		while (!todo.isEmpty()) {
 			String id = todo.poll();
 			if (!seen.add(id)) {

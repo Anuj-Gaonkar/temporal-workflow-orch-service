@@ -53,11 +53,11 @@ class Outreach20DayYamlTest {
 		finish();
 
 		assertThat(activities.calls).extracting(RecordingActivities.Call::channel)
-				.containsExactly("WHATSAPP", "WHATSAPP", "EMAIL", "SMS", "VOICE", "WHATSAPP", "SMS");
+				.containsExactly("WHATSAPP", "WHATSAPP", "VOICE", "SMS", "WHATSAPP", "WHATSAPP", "SMS");
 		assertThat(activities.calls).extracting(c -> dayNumber(c.atMillis()))
 				.containsExactly(1L, 4L, 7L, 10L, 15L, 20L, 20L);
 		assertThat(activities.calls).extracting(c -> hourOf(c.atMillis())).containsOnly(10);
-		assertThat(activities.calls.get(4).activity()).isEqualTo("executeVoiceCall");
+		assertThat(activities.calls.get(2).activity()).isEqualTo("executeVoiceCall");
 		// the WhatsApp contacts carry the answer Flow
 		assertThat(activities.flows).hasSize(3).containsOnly("AMB_REMINDER_RADIO->910000000001");
 	}
@@ -73,18 +73,51 @@ class Outreach20DayYamlTest {
 	}
 
 	@Test
-	void remindLaterAfterTheEmailSendsOneReminderOnTheChosenChannelThenContinuesWithDayTen() {
+	void remindLaterOnAnotherChannelSendsOneReminderThereThenFollowsTheDefaultsAgain() {
 		YamlWorkflow wf = start();
-		awaitContacts(3); // Day 1, Day 4, Day 7 email
+		awaitContacts(3); // Day 1, Day 4, Day 7 (VOICE by default)
 		wf.feedback(new FeedbackSignal("REMIND_LATER", "1d", "SMS"));
 		awaitContacts(4);
 		RecordingActivities.Call reminder = activities.calls.get(3);
 		assertThat(reminder.channel()).isEqualTo("SMS");
 		assertThat(dayNumber(reminder.atMillis())).isEqualTo(8L);
 
-		finish(); // the reminder goes unanswered, so the ladder carries on
+		finish(); // the reminder goes unanswered: NO_RESPONSE -> DEFAULT, so Day 10 and Day 15 use the table
 		assertThat(activities.calls).extracting(RecordingActivities.Call::channel)
-				.containsExactly("WHATSAPP", "WHATSAPP", "EMAIL", "SMS", "SMS", "VOICE", "WHATSAPP", "SMS");
+				.containsExactly("WHATSAPP", "WHATSAPP", "VOICE", "SMS", "SMS", "WHATSAPP", "WHATSAPP", "SMS");
+	}
+
+	@Test
+	void remindLaterWithoutAChannelStaysOnTheChannelOfTheContactItAnswered() {
+		YamlWorkflow wf = start();
+		awaitContacts(3); // Day 7 is a call
+		wf.feedback(new FeedbackSignal("REMIND_LATER", "1d", null));
+		awaitContacts(4);
+		assertThat(activities.calls.get(3).channel()).isEqualTo("VOICE");
+		assertThat(activities.calls.get(3).activity()).isEqualTo("executeVoiceCall");
+		finish();
+	}
+
+	@Test
+	void inconclusiveKeepsTheChannelInsteadOfTakingTheDefault() {
+		YamlWorkflow wf = start();
+		awaitContacts(3); // Day 7 is a call
+		wf.feedback(new FeedbackSignal("INCONCLUSIVE", null, null));
+		awaitContacts(4);
+		// the table says SMS for Day 10, but INCONCLUSIVE -> SAME keeps the call
+		assertThat(activities.calls.get(3).channel()).isEqualTo("VOICE");
+		assertThat(dayNumber(activities.calls.get(3).atMillis())).isEqualTo(10L);
+		finish(); // then silence: Day 15 follows the table again
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel)
+				.containsExactly("WHATSAPP", "WHATSAPP", "VOICE", "VOICE", "WHATSAPP", "WHATSAPP", "SMS");
+	}
+
+	@Test
+	void aCustomerWhoseDatabaseChannelIsVoiceGetsTheVoiceColumnOfTheTable() {
+		start(new Customer("C1001", "Test One", "+910000000001", "910000000001", "VOICE"));
+		finish();
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel)
+				.containsExactly("VOICE", "VOICE", "WHATSAPP", "SMS", "VOICE", "WHATSAPP", "SMS");
 	}
 
 	@Test
@@ -98,11 +131,69 @@ class Outreach20DayYamlTest {
 		assertThat(activities.calls).hasSize(7);
 	}
 
+	@Test
+	void everyLaterContactIsCheckedAgainstTheFlagButTheFirstContactAndTheThankYouAreNot() {
+		YamlWorkflow wf = start();
+		awaitContacts(2);
+		wf.feedback(new FeedbackSignal("POSITIVE", null, null));
+		finish();
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel).containsExactly("WHATSAPP", "WHATSAPP", "SMS");
+		assertThat(activities.guardChecks).containsExactly("contact-day4"); // not contact-day1, not thank-you
+	}
+
+	@Test
+	void aSilentCustomerWhoDoesNotMeetTheConditionIsCheckedBeforeEveryLaterContactIncludingTheFinalNotices() {
+		start();
+		finish();
+		assertThat(activities.guardChecks).containsExactly("contact-day4", "contact-day7", "contact-day10", "contact-day15",
+				"final-notice-whatsapp", "final-notice-sms");
+		assertThat(activities.calls).hasSize(7);
+	}
+
+	@Test
+	void aCustomerWhoAlreadyMeetsTheConditionStillGetsTheFirstContactThenOnlyTheThankYou() {
+		activities.flagSet = true;
+		start();
+		finish();
+
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel).containsExactly("WHATSAPP", "SMS");
+		assertThat(activities.calls).extracting(c -> dayNumber(c.atMillis())).containsExactly(1L, 4L);
+		assertThat(activities.guardChecks).containsExactly("contact-day4");
+		assertThat(activities.texts.get(activities.texts.size() - 1)).contains("required balance is maintained");
+	}
+
+	@Test
+	void theConditionMetWhileTheWorkflowWaitsStopsTheNextScheduledContact() {
+		start();
+		awaitContacts(1);
+		activities.flagSet = true;
+		finish();
+
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel).containsExactly("WHATSAPP", "SMS");
+		assertThat(activities.guardChecks).containsExactly("contact-day4");
+	}
+
+	@Test
+	void aRequestedReminderIsCheckedToo() {
+		YamlWorkflow wf = start();
+		awaitContacts(1);
+		activities.flagSet = true;
+		wf.feedback(new FeedbackSignal("REMIND_LATER", null, null));
+		finish();
+
+		assertThat(activities.calls).extracting(RecordingActivities.Call::channel).containsExactly("WHATSAPP", "SMS");
+		assertThat(activities.guardChecks).containsExactly("remind-day1");
+	}
+
 	private YamlWorkflow start() {
+		return start(CUSTOMER);
+	}
+
+	private YamlWorkflow start(Customer customer) {
 		triggeredAt = env.currentTimeMillis();
 		YamlWorkflow workflow = env.getWorkflowClient().newWorkflowStub(YamlWorkflow.class,
 				WorkflowOptions.newBuilder().setWorkflowId(WORKFLOW_ID).setTaskQueue(OrchTaskQueue.NAME).build());
-		WorkflowClient.start(workflow::run, definition, new WorkflowInput(CUSTOMER));
+		WorkflowClient.start(workflow::run, definition, new WorkflowInput(customer));
 		return workflow;
 	}
 

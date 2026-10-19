@@ -59,6 +59,7 @@ public class WorkflowStarterService {
 			Customer customer = customers.findById(customerId).orElseThrow(() ->
 					new StartRejectedException(Reason.CUSTOMER_NOT_FOUND, "No customer with id '" + customerId + "'"));
 			long lookupMs = elapsedMs(lookupStart);
+			checkChannel(definition, customer);
 
 			workflowId = definition.getName() + "-" + customerId;
 			MDC.put("workflowId", workflowId);
@@ -108,6 +109,7 @@ public class WorkflowStarterService {
 				MDC.put("customerId", customer.customerId());
 				MDC.put("workflowId", workflowId);
 				try {
+					checkChannel(definition, customer);
 					WorkflowExecution execution = startWorkflow(workflowId, definition, customer);
 					long startMs = elapsedMs(oneStart);
 					log.info(line(LogEvents.API_START_DONE, "workflowId", workflowId, "runId", execution.getRunId(),
@@ -121,7 +123,11 @@ public class WorkflowStarterService {
 							"definition", definitionName, "reason", e.reason(), "totalMs", elapsedMs(oneStart)));
 					items.add(new StartAllResult.Item(customer.customerId(), customer.initialChannel(), e.reason().name(),
 							workflowId, null, e.getMessage()));
-					alreadyRunning++;
+					if (e.reason() == Reason.ALREADY_RUNNING) {
+						alreadyRunning++;
+					} else {
+						failed++;
+					}
 				} catch (RuntimeException e) {
 					log.error(line(LogEvents.API_START_REJECTED, "customerId", customer.customerId(),
 							"definition", definitionName, "reason", "START_FAILED", "totalMs", elapsedMs(oneStart),
@@ -143,6 +149,16 @@ public class WorkflowStarterService {
 			log.info(line(LogEvents.API_START_REJECTED, "definition", definitionName, "reason", e.reason(),
 					"totalMs", elapsedMs(startedNanos)));
 			throw e;
+		}
+	}
+
+	/** The customer's database channel must be one the definition declares, so a mismatch fails here and not on Day 1. */
+	private static void checkChannel(WorkflowDefinition definition, Customer customer) {
+		String channel = customer.initialChannel();
+		if (channel != null && !definition.knownChannels().contains(channel)) {
+			throw new StartRejectedException(Reason.CHANNEL_NOT_SUPPORTED, "Customer '" + customer.customerId() + "' has channel '"
+					+ channel + "', which definition '" + definition.getName() + "' does not declare (it declares "
+					+ new java.util.TreeSet<>(definition.knownChannels()) + ")");
 		}
 	}
 

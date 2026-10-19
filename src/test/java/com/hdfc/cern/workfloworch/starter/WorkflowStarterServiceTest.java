@@ -48,7 +48,7 @@ class WorkflowStarterServiceTest {
 		env = TestWorkflowEnvironment.newInstance();
 		Worker worker = env.newWorker(OrchTaskQueue.NAME);
 		worker.registerWorkflowImplementationTypes(YamlWorkflowImpl.class);
-		worker.registerActivitiesImplementations(new OrchActivitiesImpl(new com.hdfc.cern.workfloworch.activity.NoOpWhatsAppGateway()));
+		worker.registerActivitiesImplementations(new OrchActivitiesImpl(new com.hdfc.cern.workfloworch.activity.NoOpWhatsAppGateway(), (id, column) -> false));
 		env.start();
 		starter = new WorkflowStarterService(env.getWorkflowClient(), loader, new FakeCustomers());
 	}
@@ -95,6 +95,23 @@ class WorkflowStarterServiceTest {
 
 		assertRejected("C1001", "OUTREACH_DEFAULT", Reason.ALREADY_RUNNING, 409);
 		assertThat(starter.start("C1002", "OUTREACH_DEFAULT").workflowId()).isEqualTo("OUTREACH_DEFAULT-C1002");
+	}
+
+	@Test
+	void aCustomerChannelTheDefinitionDoesNotDeclareIs422AndStartAllCountsItAsFailed() {
+		FakeCustomers customers = new FakeCustomers();
+		customers.rows.put("C1003", new Customer("C1003", "Test Three", "+910000000003", "910000000003", "CHAT_BOT"));
+		DefinitionLoader loader = new DefinitionLoader("workflow-definitions");
+		loader.load();
+		starter = new WorkflowStarterService(env.getWorkflowClient(), loader, customers);
+
+		assertRejected("C1003", "OUTREACH_20_DAY", Reason.CHANNEL_NOT_SUPPORTED, 422);
+		StartAllResult result = starter.startAll("OUTREACH_20_DAY");
+		assertThat(result.started()).isEqualTo(2);
+		assertThat(result.failed()).isEqualTo(1);
+		assertThat(result.alreadyRunning()).isZero();
+		assertThat(result.results()).filteredOn(i -> i.customerId().equals("C1003"))
+				.extracting(StartAllResult.Item::status).containsExactly("CHANNEL_NOT_SUPPORTED");
 	}
 
 	@Test

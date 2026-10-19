@@ -12,6 +12,8 @@ public interface OrchActivities {
 	String EXECUTE_VOICE_CALL = "executeVoiceCall";
 	String SEND_MESSAGE = "sendMessage";
 	Set<String> NAMES = Set.of(EXECUTE_VOICE_CALL, SEND_MESSAGE);
+	/** Used by the workflow itself for {@code contactGuard}; not something a YAML {@code activity:} step can call, so not in {@link #NAMES}. */
+	String CHECK_CUSTOMER_FLAG = "checkCustomerFlag";
 
 	/** Logs the voice call (params: script). */
 	@ActivityMethod
@@ -20,4 +22,8 @@ public interface OrchActivities {
 	/** Logs the message (params: channel, text). */
 	@ActivityMethod
 	void sendMessage(ActivityInput input);
+
+	/** Reads a boolean column of the customer's row from the database (params: column). */
+	@ActivityMethod
+	boolean checkCustomerFlag(ActivityInput input);
 }

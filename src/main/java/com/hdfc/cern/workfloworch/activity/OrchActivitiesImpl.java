@@ -2,15 +2,18 @@ package com.hdfc.cern.workfloworch.activity;
 
 import static com.hdfc.cern.workfloworch.logging.LogEvents.line;
 
+import com.hdfc.cern.workfloworch.customer.CustomerFlags;
 import com.hdfc.cern.workfloworch.logging.ConversationLog;
 import com.hdfc.cern.workfloworch.logging.LogEvents;
 import com.hdfc.cern.workfloworch.workflow.OrchTaskQueue;
 import io.temporal.activity.Activity;
 import io.temporal.activity.ActivityInfo;
+import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.ActivityImpl;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -21,8 +24,15 @@ public class OrchActivitiesImpl implements OrchActivities {
 	/** Readable "what we sent" lines; also written to logs/conversation.log. */
 	private final WhatsAppGateway whatsApp;
 
-	public OrchActivitiesImpl(WhatsAppGateway whatsApp) {
+	/** Test aid (on in the dev profile): start each WhatsApp message with "[customerId | channel | stepId]". Off by default, so customers never see it. */
+	@Value("${orch.whatsapp.tag-messages:false}")
+	private boolean tagMessages;
+
+	private final CustomerFlags flags;
+
+	public OrchActivitiesImpl(WhatsAppGateway whatsApp, CustomerFlags flags) {
 		this.whatsApp = whatsApp;
+		this.flags = flags;
 	}
 
 	private static final org.slf4j.Logger conversation = org.slf4j.LoggerFactory.getLogger(ConversationLog.LOGGER);
@@ -47,6 +57,20 @@ public class OrchActivitiesImpl implements OrchActivities {
 		});
 	}
 
+	@Override
+	public boolean checkCustomerFlag(ActivityInput input) {
+		boolean[] result = new boolean[1];
+		run(CHECK_CUSTOMER_FLAG, input, () -> {
+			try {
+				result[0] = flags.isSet(input.customer().customerId(), param(input, "column"));
+			} catch (IllegalArgumentException e) {
+				// a column that is not allowed will not become allowed by retrying
+				throw ApplicationFailure.newNonRetryableFailure(e.getMessage(), "BadGuardColumn");
+			}
+		});
+		return result[0];
+	}
+
 	/** Placeholder prefix for the channels simulated on WhatsApp; null for WHATSAPP itself (sent as is). */
 	private static String placeholder(String channel) {
 		return switch (channel == null ? "" : channel) {
@@ -68,6 +92,9 @@ public class OrchActivitiesImpl implements OrchActivities {
 			return;
 		}
 		String message = prefix == null ? text : (text == null || text.isBlank() ? prefix : prefix + ": " + text);
+		if (tagMessages) {
+			message = "[" + input.customer().customerId() + " | " + channel + " | " + input.stepId() + "] " + message;
+		}
 		String waId = input.customer().waId();
 		String flowKey = prefix == null ? param(input, "flowKey") : null;
 		String workflowId = Activity.getExecutionContext().getInfo().getWorkflowId();

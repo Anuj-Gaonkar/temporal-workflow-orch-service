@@ -3,7 +3,7 @@ package com.hdfc.cern.workfloworch.starter;
 import static com.hdfc.cern.workfloworch.logging.LogEvents.line;
 
 import com.hdfc.cern.workfloworch.api.FeedbackRequest;
-import com.hdfc.cern.workfloworch.definition.Channels;
+import com.hdfc.cern.workfloworch.definition.DefinitionLoader;
 import com.hdfc.cern.workfloworch.definition.DurationParser;
 import com.hdfc.cern.workfloworch.definition.FeedbackTypes;
 import com.hdfc.cern.workfloworch.logging.LogEvents;
@@ -26,9 +26,11 @@ import org.springframework.stereotype.Service;
 public class FeedbackService {
 
 	private final WorkflowClient workflowClient;
+	private final DefinitionLoader definitions;
 
-	public FeedbackService(WorkflowClient workflowClient) {
+	public FeedbackService(WorkflowClient workflowClient, DefinitionLoader definitions) {
 		this.workflowClient = workflowClient;
+		this.definitions = definitions;
 	}
 
 	public FeedbackResult send(String workflowId, FeedbackRequest request) {
@@ -57,7 +59,7 @@ public class FeedbackService {
 		}
 	}
 
-	private static FeedbackSignal validate(FeedbackRequest request) {
+	private FeedbackSignal validate(FeedbackRequest request) {
 		if (request == null || isBlank(request.type())) {
 			throw bad("type is required (one of " + new java.util.TreeSet<>(FeedbackTypes.ALL) + ")");
 		}
@@ -77,8 +79,11 @@ public class FeedbackService {
 				throw bad("bad remindAfter: " + e.getMessage());
 			}
 		}
-		if (channel != null && !Channels.ALL.contains(channel)) {
-			throw bad("unknown channel '" + request.channel() + "' (use one of " + new java.util.TreeSet<>(Channels.ALL) + ")");
+		if (channel != null) {
+			java.util.Set<String> known = definitions.knownChannels();
+			if (!known.contains(channel)) {
+				throw bad("unknown channel '" + request.channel() + "' (use one of " + known + ")");
+			}
 		}
 		return new FeedbackSignal(type, remindAfter, channel);
 	}

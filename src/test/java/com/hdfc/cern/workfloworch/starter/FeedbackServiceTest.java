@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.hdfc.cern.workfloworch.activity.OrchActivitiesImpl;
 import com.hdfc.cern.workfloworch.api.FeedbackRequest;
+import com.hdfc.cern.workfloworch.definition.DefinitionLoader;
 import com.hdfc.cern.workfloworch.definition.ShippedYaml;
 import com.hdfc.cern.workfloworch.starter.StartRejectedException.Reason;
 import com.hdfc.cern.workfloworch.workflow.OrchTaskQueue;
@@ -30,9 +31,11 @@ class FeedbackServiceTest {
 		env = TestWorkflowEnvironment.newInstance();
 		Worker worker = env.newWorker(OrchTaskQueue.NAME);
 		worker.registerWorkflowImplementationTypes(YamlWorkflowImpl.class);
-		worker.registerActivitiesImplementations(new OrchActivitiesImpl(new com.hdfc.cern.workfloworch.activity.NoOpWhatsAppGateway()));
+		worker.registerActivitiesImplementations(new OrchActivitiesImpl(new com.hdfc.cern.workfloworch.activity.NoOpWhatsAppGateway(), (id, column) -> false));
 		env.start();
-		feedback = new FeedbackService(env.getWorkflowClient());
+		DefinitionLoader loader = new DefinitionLoader("workflow-definitions");
+		loader.load();
+		feedback = new FeedbackService(env.getWorkflowClient(), loader);
 
 		YamlWorkflow workflow = env.getWorkflowClient().newWorkflowStub(YamlWorkflow.class,
 				WorkflowOptions.newBuilder().setWorkflowId("OUTREACH_DEFAULT-C1001").setTaskQueue(OrchTaskQueue.NAME).build());

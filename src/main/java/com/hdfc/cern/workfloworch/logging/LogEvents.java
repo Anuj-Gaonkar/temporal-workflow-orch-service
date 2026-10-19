@@ -26,6 +26,9 @@ public final class LogEvents {
 	public static final String WF_FEEDBACK_DROPPED = "WF_FEEDBACK_DROPPED";
 	public static final String WF_COUNTER = "WF_COUNTER";
 	public static final String WF_WINDOW_EXPIRED = "WF_WINDOW_EXPIRED";
+	public static final String WF_CHANNEL_CHOSEN = "WF_CHANNEL_CHOSEN";
+	public static final String WF_GUARD_CHECKED = "WF_GUARD_CHECKED";
+	public static final String WF_CONTACT_SKIPPED = "WF_CONTACT_SKIPPED";
 	public static final String ACT_START = "ACT_START";
 	public static final String ACT_DONE = "ACT_DONE";
 	public static final String ACT_FAILED = "ACT_FAILED";

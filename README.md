@@ -12,6 +12,12 @@ A small proof of concept that starts a **Temporal workflow per customer, defined
 
 **WhatsApp is real here.** A `WHATSAPP` contact calls `whatsapp-flows-service` (port 8182), which sends the customer a WhatsApp Flow on Day 1 (reminders go out as plain WhatsApp text). The customer's answer in the Flow comes back as feedback (`REMIND_LATER`), so someone who sets a reminder gets it on WhatsApp. `VOICE` and `SMS` contacts still only write a log line. See [`docs/phase-3/`](docs/phase-3/03-architecture.md).
 
+**Channels (optional, in the YAML).** A `channels:` block lists the channel codes the definition accepts (default `VOICE`, `WHATSAPP`, `SMS`, `EMAIL`); a customer whose DB channel is not listed is refused at start with `422 CHANNEL_NOT_SUPPORTED`. A `"*"` block in `channelDefaults` covers every listed channel without a block of its own.
+
+**Contact guard (optional, in the YAML).** `contactGuard` reads a boolean column of `orch.customers` (for example `balance_maintained`, set by another system) just before each contact except the listed ones; when it is true the contact is replaced by a thank-you step and the campaign ends. See [`docs/yaml-guide.md`](docs/yaml-guide.md). Existing databases need `ALTER TABLE orch.customers ADD COLUMN IF NOT EXISTS balance_maintained BOOLEAN NOT NULL DEFAULT false;` (the end of `db/01_schema.sql`).
+
+**Channel rules (optional, in the YAML).** A contact with `channel: AUTO` takes its channel from `channelDefaults` (per DB channel, per contact step) and `channelRules` (what each feedback type does to the next channel: `DEFAULT`, `SAME`, `FLIP`, `REQUESTED`). See [`docs/yaml-guide.md`](docs/yaml-guide.md) and `workflow-definitions/outreach-20-day.yaml`.
+
 Docs are in [`docs/`](docs/README.md).
 
 ## Profiles: dev (minutes) and prod (days)

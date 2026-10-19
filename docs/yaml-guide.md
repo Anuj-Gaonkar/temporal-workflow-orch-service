@@ -18,6 +18,10 @@ Top level:
 | `name` | yes | string | Unique across files. The caller names it in `POST /workflows/start`; it prefixes the workflow id. |
 | `description` | no | string | Shown by `GET /workflow-definitions`. |
 | `campaign` | no | block | The campaign window (since phase 2). Without it nothing limits how long the workflow runs and `untilDay` is not allowed. |
+| `channels` | no | block | The channels this definition knows (default: `VOICE`, `WHATSAPP`, `SMS`, `EMAIL`). See "Channels". |
+| `channelDefaults` | no | block | Default channel of each scheduled contact, by the customer's DB channel. See "Channel defaults and rules". |
+| `channelRules` | no | block | What the customer's feedback does to the channel of the next `channel: AUTO` contact. |
+| `contactGuard` | no | block | A DB flag checked before each contact (except the listed ones); when it is true the contact is replaced by a thank-you step. See "Contact guard". |
 | `start` | yes | step id | First step. |
 | `steps` | yes | non-empty list | The steps. |
 
@@ -37,10 +41,73 @@ Every step: `id` (required, unique) and `type` (required: `switch`, `activity`, 
 | `switch` | `on` (required), `cases` (value to step id), `default` (optional step id) | Picks the next step from a path (see below). Exact, case-sensitive string match. No match and no `default` (also when the path has no value): the workflow fails with `No case for feedback.type=XYZ in step 'route-first'`. Needs `cases` or `default`. When `on` is `feedback.type`, every case must be a feedback type. |
 | `activity` | `activity` (required), `params` (optional string map), `next` (required) | Runs a registered activity, then goes to `next`. Since phase 2 it is skipped (workflow ends) if the campaign window has closed. |
 | `delay` | exactly one of `duration`, `fromVar` (+ `defaultDuration`), `untilDay`; `next` (required) | A durable timer, then `next`. See "Delays". If the wake-up time is outside the campaign window the workflow ends instead of sleeping. |
-| `contact` (phase 2) | `channel` (required), `defaultChannel` (optional), `text` (required), `flow` (optional), `next` (required) | Contacts the customer. VOICE runs `executeVoiceCall` (the text is the call script); WHATSAPP and SMS run `sendMessage`. A WHATSAPP contact really sends: with `flow: <flow key>` (e.g. `AMB_REMINDER_RADIO`) the customer gets that WhatsApp Flow and `text` is its message body; without `flow` it is a plain WhatsApp text. SMS and VOICE only log. A WhatsApp delivery failure (for example outside the 24 hour window) is logged and the campaign carries on. Remembers the channel as `last.channel`. Feedback that arrived before the contact started is dropped. |
+| `contact` (phase 2) | `channel` (required; a literal, a path, or `AUTO`), `defaultChannel` (optional), `text` (required), `flow` (optional), `next` (required) | Contacts the customer. VOICE runs `executeVoiceCall` (the text is the call script); WHATSAPP and SMS run `sendMessage`. A WHATSAPP contact really sends: with `flow: <flow key>` (e.g. `AMB_REMINDER_RADIO`) the customer gets that WhatsApp Flow and `text` is its message body; without `flow` it is a plain WhatsApp text. SMS and VOICE only log. A WhatsApp delivery failure (for example outside the 24 hour window) is logged and the campaign carries on. Remembers the channel as `last.channel`. Feedback that arrived before the contact started is dropped. |
 | `await-feedback` (phase 2) | `timeout` (required), `next` (required) | Waits for customer feedback up to `timeout`. Feedback becomes `feedback.type` etc.; no feedback in time becomes `feedback.type = NO_RESPONSE`. Follow it with a `switch` on `feedback.type`. |
 | `count` (phase 2) | `counter` (required name) and either `reset: true` + `next`, or `limit` + `whenReached` + `next` | A named counter for the run. `reset: true` sets it to 0 and goes to `next`. Otherwise it adds 1; once the counter has reached `limit` the workflow goes to `whenReached`, else to `next`. Used to stop after N unanswered reminders. |
 | `end` | none | Finishes the workflow normally (status COMPLETED). Never Temporal's terminate. |
+
+### Channels (optional)
+
+```yaml
+channels:                   # channel code -> settings; the codes come from the customers' DB channel
+  VOICE:    { flip: WHATSAPP }
+  WHATSAPP: { flip: VOICE }
+  CHAT_BOT: { flip: WHATSAPP }
+```
+
+A definition accepts only the channels it lists; left out, it accepts `VOICE`, `WHATSAPP`, `SMS` and `EMAIL`. Every channel named anywhere else in the file (a step, `channelDefaults`, `channelRules`, a `flip`) must be listed, and the load fails otherwise. A code is upper-case letters, digits and `_`; `AUTO` and `DB` are reserved. `flip` is the channel `FLIP` switches to from this one.
+
+A customer whose DB channel is not listed cannot start the definition: `POST /workflows/start` answers `422 CHANNEL_NOT_SUPPORTED`, and `start-all` reports that customer as failed and carries on. The feedback endpoint accepts a `channel` only if some loaded definition lists it. A new DB channel therefore needs one line here, plus a sender in the code: only WHATSAPP really leaves the service today, and other channels are logged and simulated or skipped (see `OrchActivitiesImpl`).
+
+### Contact guard (optional)
+
+Stops reminders for a customer who no longer needs them, for example one who keeps the required balance.
+
+```yaml
+contactGuard:
+  column: balance_maintained        # boolean column of orch.customers
+  onMet: thank-you-balance          # contact step to go to when the column is true
+  except: [contact-day1, thank-you] # contact steps that are never checked
+```
+
+Just before each `contact` step the workflow reads `column` for that customer from the database (a fresh read, not the snapshot taken at start). If it is `true`, the contact is not sent and the workflow goes to `onMet`, normally a thank-you contact that leads to `end`. If it is `false` the contact goes out as usual.
+
+- Every contact is checked except the ones in `except` and the `onMet` step itself (so there is no loop). The first contact is normally listed in `except`, so every customer is contacted once. Reminders, Day 20 final notices and so on are checked.
+- The check runs only just before a contact. A customer who meets the condition while the workflow waits is thanked at the next contact instead of getting a reminder; the workflow does not wake up early.
+- `column` must be listed in the server setting `orch.guard.allowed-columns` (default `balance_maintained`, environment variable `ORCH_GUARD_COLUMNS`, comma separated). The YAML cannot name any other column.
+- The flag is set by another system. This service only reads it (`balance_maintained BOOLEAN NOT NULL DEFAULT false`, see `db/01_schema.sql`; for an existing table run the `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` at the end of that file).
+- If the database cannot be read, the check is retried with growing pauses (at most a minute apart) until it works. The contact is never sent unchecked, and the run does not fail.
+- Logged as `event=WF_GUARD_CHECKED` (`stepId`, `column`, `met`) and, when it fires, `event=WF_CONTACT_SKIPPED` (`reason=GUARD_MET:<column>`, `goTo`).
+
+### Channel defaults and rules (optional)
+
+A contact with `channel: AUTO` does not name its channel. The channel comes from the two optional blocks below. Without them `AUTO` means: the customer's DB channel for the first contact, then the channel used last. A literal channel on a step always wins.
+
+```yaml
+channelDefaults:            # DB channel -> (contact step id -> channel); DB = the customer's DB channel
+  VOICE:    { contact-day1: DB, contact-day4: VOICE, contact-day7: WHATSAPP }
+  WHATSAPP: { contact-day1: DB, contact-day4: WHATSAPP, contact-day7: VOICE }
+  "*":      { contact-day1: DB, contact-day4: WHATSAPP, contact-day7: VOICE }   # every other listed channel
+
+channelRules:
+  onFeedback:               # feedback type -> action for the NEXT contact
+    NO_RESPONSE:  DEFAULT
+    INCONCLUSIVE: SAME
+    REMIND_LATER: REQUESTED
+  flip: { VOICE: SMS }      # optional, overrides the flip of the channels block for these channels only
+```
+
+The `"*"` block (quote it: a bare `*` is a YAML alias) is used by every listed channel that has no block of its own. Without it, such a customer stays on their own channel for every `DEFAULT` contact.
+
+| Action | Next `AUTO` contact goes on |
+|---|---|
+| `DEFAULT` | The `channelDefaults` entry of that step for the customer's DB channel. No entry: behaves as `SAME`. Not allowed for `REMIND_LATER` (the next contact is a reminder). |
+| `SAME` | The channel of the last contact. This is what a feedback type with no rule does. |
+| `FLIP` | The `flip` channel of the one used last (built in, when there is no `channels` block: VOICE to WHATSAPP, WHATSAPP to VOICE, SMS and EMAIL to WHATSAPP); `channelRules.flip` overrides single entries. If `FLIP` is used, every listed channel needs a flip target. It flips from the channel used last, so repeated silence alternates. |
+| `REQUESTED` | The `channel` in the feedback, else the channel used last. Only valid for `REMIND_LATER`. |
+| a channel name | That channel, always. |
+
+The first contact has no feedback yet: it takes its `channelDefaults` entry (`DB` = the customer's DB channel), or the DB channel when there is none. Dates stay in the steps (`untilDay`); `channelDefaults` only assigns channels, keyed by step id. Reminder steps can simply say `channel: AUTO` so the `REMIND_LATER` rule picks their channel. Each choice is logged as `event=WF_CHANNEL_CHOSEN` (`stepId`, `channel`, `action`, `FIRST` before any feedback). See the shipped `outreach-20-day.yaml`.
 
 ### Paths: `on`, `fromVar`, `channel` (since phase 1, extended in phase 2)
 
@@ -117,6 +184,11 @@ Checked at startup and on every reload; a broken file reports `Invalid workflow 
 | `untilDay` problems | `'untilDay' must be at least 1`, `'untilDay' needs a 'campaign' block`, `'untilDay' 16 is after the campaign window (maxDays 15)` |
 | count problems | `count needs 'counter'`, `count needs 'reset: true' or a 'limit' of at least 1`, `count with a 'limit' needs 'whenReached'`, `a count with 'reset: true' must not have 'limit' or 'whenReached'`, `whenReached points to unknown step ...` |
 | contact problems | `contact needs 'channel'`, `contact needs 'text'`, `bad 'channel' 'PIGEON' (use [...] or a path: [...])` |
+| bad `channels` | `channels 'X': a channel code is upper-case ...`, `'X' is reserved`, `flip 'X' is not a declared channel`, `must not flip to itself` |
+| bad `channelDefaults` | `channelDefaults: 'X' is not a channel declared for this definition`, `'x' is not a contact step`, `step 'x' must use 'channel: AUTO' to take a default`, `bad channel 'X' for 'y'` |
+| bad `channelRules` | `not a feedback type`, `bad action 'X'`, `DEFAULT is not allowed` (REMIND_LATER), `REQUESTED only makes sense for REMIND_LATER`, `channelRules.flip: ... must map a channel to a channel`, `must not flip to itself` |
+| bad `contactGuard` | `contactGuard: column 'X' is not allowed`, `'column' is required`, `onMet 'x' is not a contact step`, `'onMet' is required`, `except 'x' is not a contact step` |
+| blocks but no `AUTO` contact | `'channelDefaults' / 'channelRules' are defined but no contact step uses 'channel: AUTO'` |
 | bad campaign block | `campaign: 'maxDays' must be at least 1`, `campaign: unknown 'timezone' 'x'`, `campaign: 'sendHour' must be between 0 and 23`, `campaign: bad 'dayLength': ...` |
 | `start`, `next`, case or default points nowhere | `start step 'x' does not exist`, `step 'a': next points to unknown step 'b'`, `case 'POSITIVE' points to unknown step ...` |
 | non-end step without a way forward | `step 'x': 'next' is required ...`, `switch needs 'cases' or 'default'` |

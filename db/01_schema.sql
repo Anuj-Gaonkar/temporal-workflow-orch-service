@@ -19,7 +19,12 @@ CREATE TABLE IF NOT EXISTS orch.customers (
     wa_id           VARCHAR(20)  NOT NULL,
     initial_channel VARCHAR(20)  NOT NULL,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    -- Set by another system when the customer keeps the required balance; a workflow's contactGuard reads it before each reminder.
+    balance_maintained BOOLEAN   NOT NULL DEFAULT false,
     CONSTRAINT customers_pkey PRIMARY KEY (customer_id),
     CONSTRAINT customers_initial_channel_check CHECK (initial_channel IN ('WHATSAPP', 'VOICE')),
     CONSTRAINT customers_wa_id_digits_check CHECK (wa_id ~ '^[0-9]{8,20}$')
 );
+
+-- For a table created before this column existed (the CREATE above does nothing when the table is already there).
+ALTER TABLE orch.customers ADD COLUMN IF NOT EXISTS balance_maintained BOOLEAN NOT NULL DEFAULT false;

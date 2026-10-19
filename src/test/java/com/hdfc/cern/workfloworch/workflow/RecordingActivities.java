@@ -23,11 +23,15 @@ class RecordingActivities implements OrchActivities {
 		public void sendText(String waId, String message) {
 			texts.add(waId + ":" + message);
 		}
-	});
+	}, (customerId, column) -> false);
 	private final LongSupplier clock;
 	final List<Call> calls = new CopyOnWriteArrayList<>();
 	final List<String> flows = new CopyOnWriteArrayList<>();
 	final List<String> texts = new CopyOnWriteArrayList<>();
+	/** What the guard's database read returns; a test flips it to simulate the customer meeting the condition. */
+	volatile boolean flagSet;
+	/** Step ids whose contact was checked against the flag, in order. */
+	final List<String> guardChecks = new CopyOnWriteArrayList<>();
 
 	RecordingActivities(LongSupplier clock) {
 		this.clock = clock;
@@ -43,5 +47,11 @@ class RecordingActivities implements OrchActivities {
 	public void sendMessage(ActivityInput input) {
 		calls.add(new Call(SEND_MESSAGE, clock.getAsLong(), input.params().get("channel")));
 		real.sendMessage(input);
+	}
+
+	@Override
+	public boolean checkCustomerFlag(ActivityInput input) {
+		guardChecks.add(input.stepId());
+		return flagSet;
 	}
 }

@@ -9,6 +9,64 @@ campaign:
   timezone: Asia/Kolkata
   sendHour: 10
 
+# Optional. The channels this campaign knows; left out, VOICE, WHATSAPP, SMS and EMAIL apply.
+# A customer whose database channel is not listed here cannot start this campaign (the start is refused with CHANNEL_NOT_SUPPORTED).
+# A new database channel means one new line here (and a sender for it in the code).
+# flip = the channel FLIP (see channelRules) switches to from this one.
+channels:
+  VOICE:    { flip: WHATSAPP }
+  WHATSAPP: { flip: VOICE }
+  SMS:      { flip: WHATSAPP }
+  EMAIL:    { flip: WHATSAPP }
+
+# Optional. Default channel of each scheduled contact, by the customer's database channel (DB = that channel).
+# Only steps with "channel: AUTO" use it. Keyed by step id, so adding a contact means adding one line here.
+# The dates stay in the steps (untilDay). The Day 20 final notices keep fixed channels.
+# "*" (quoted) is the block for every listed channel that has none of its own (here SMS and EMAIL customers).
+channelDefaults:
+  VOICE:
+    contact-day1:  DB
+    contact-day4:  VOICE
+    contact-day7:  WHATSAPP
+    contact-day10: SMS
+    contact-day15: VOICE
+  WHATSAPP:
+    contact-day1:  DB
+    contact-day4:  WHATSAPP
+    contact-day7:  VOICE
+    contact-day10: SMS
+    contact-day15: WHATSAPP
+  "*":
+    contact-day1:  DB
+    contact-day4:  WHATSAPP
+    contact-day7:  VOICE
+    contact-day10: SMS
+    contact-day15: WHATSAPP
+
+# Optional. What the customer's feedback does to the channel of the next AUTO contact:
+#   DEFAULT   follow channelDefaults for the next scheduled contact
+#   SAME      keep the channel used last
+#   FLIP      switch to the flip channel of the last one (see channels above; override one pair with a flip: map here)
+#   REQUESTED the channel the customer asked for in REMIND_LATER, else the one used last
+#   or a channel name (VOICE, WHATSAPP, SMS, EMAIL) to always use that one
+# A feedback type that is not listed behaves as SAME.
+channelRules:
+  onFeedback:
+    NO_RESPONSE:  DEFAULT
+    INCONCLUSIVE: SAME
+    REMIND_LATER: FLIP
+
+# Optional. Before every contact except the ones listed under "except", the workflow reads this boolean column of the
+# customer's row (orch.customers) fresh from the database. If it is true, the contact is NOT sent and the workflow goes
+# to onMet instead (a thank-you, then the end). The first contact is never checked, so every customer is contacted once.
+# The column must be allowed by the server (orch.guard.allowed-columns). The onMet step is never checked itself.
+# The check runs just before a contact, so a customer who meets the condition while the workflow waits is thanked at the
+# next contact instead of getting a reminder.
+contactGuard:
+  column: balance_maintained
+  onMet: thank-you-balance
+  except: [contact-day1, thank-you]
+
 # How feedback works in this file
 #  - After each contact there is an await-feedback that lasts until the next scheduled contact, so the customer can answer at any time in between.
 #  - POSITIVE      -> thank-you SMS and the campaign ends.
@@ -29,7 +87,7 @@ steps:
 
   - id: contact-day1
     type: contact
-    channel: WHATSAPP
+    channel: AUTO              # see channelDefaults and channelRules at the top
     flow: AMB_REMINDER_RADIO   # the customer answers through this WhatsApp Flow; the text below is its message body
     text: "Hello, this is HDFC Bank. We are reaching out about your account. Please let us know how you would like to proceed."
     next: await-day1
@@ -57,8 +115,7 @@ steps:
 
   - id: remind-day1
     type: contact
-    channel: reminder.channel
-    defaultChannel: last.channel
+    channel: AUTO              # REMIND_LATER rule: the channel the customer asked for, else the one used last
     text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
     next: await-remind-day1
 
@@ -82,7 +139,7 @@ steps:
 
   - id: contact-day4
     type: contact
-    channel: WHATSAPP
+    channel: AUTO              # see channelDefaults and channelRules at the top
     flow: AMB_REMINDER_RADIO   # the customer answers through this WhatsApp Flow; the text below is its message body
     text: "Hello again from HDFC Bank. This is a reminder about your account. Please let us know how you would like to proceed."
     next: await-day4
@@ -110,8 +167,7 @@ steps:
 
   - id: remind-day4
     type: contact
-    channel: reminder.channel
-    defaultChannel: last.channel
+    channel: AUTO              # REMIND_LATER rule: the channel the customer asked for, else the one used last
     text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
     next: await-remind-day4
 
@@ -135,7 +191,7 @@ steps:
 
   - id: contact-day7
     type: contact
-    channel: EMAIL
+    channel: AUTO              # see channelDefaults and channelRules at the top
     text: "HDFC Bank: an important notification about your account. Please reply or contact us to complete the pending process."
     next: await-day7
 
@@ -162,8 +218,7 @@ steps:
 
   - id: remind-day7
     type: contact
-    channel: reminder.channel
-    defaultChannel: last.channel
+    channel: AUTO              # REMIND_LATER rule: the channel the customer asked for, else the one used last
     text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
     next: await-remind-day7
 
@@ -187,7 +242,7 @@ steps:
 
   - id: contact-day10
     type: contact
-    channel: SMS
+    channel: AUTO              # see channelDefaults and channelRules at the top
     text: "HDFC Bank reminder: your account process is still pending. Please contact us or reply to complete it."
     next: await-day10
 
@@ -214,8 +269,7 @@ steps:
 
   - id: remind-day10
     type: contact
-    channel: reminder.channel
-    defaultChannel: last.channel
+    channel: AUTO              # REMIND_LATER rule: the channel the customer asked for, else the one used last
     text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
     next: await-remind-day10
 
@@ -239,7 +293,7 @@ steps:
 
   - id: contact-day15
     type: contact
-    channel: VOICE
+    channel: AUTO              # see channelDefaults and channelRules at the top
     text: "Relationship Manager call script: introduce yourself from HDFC Bank, confirm the pending process on the customer's account and agree the next step."
     next: await-day15
 
@@ -266,8 +320,7 @@ steps:
 
   - id: remind-day15
     type: contact
-    channel: reminder.channel
-    defaultChannel: last.channel
+    channel: AUTO              # REMIND_LATER rule: the channel the customer asked for, else the one used last
     text: "This is the reminder you asked for from HDFC Bank. Please let us know how you would like to proceed."
     next: await-remind-day15
 
@@ -320,6 +373,13 @@ steps:
     type: contact
     channel: SMS
     text: "Thank you from HDFC Bank. We have noted that you will complete the process."
+    next: end
+
+  # --- The balance is maintained (contactGuard): thank-you SMS instead of the next reminder, then done ---
+  - id: thank-you-balance
+    type: contact
+    channel: SMS
+    text: "Thank you from HDFC Bank. We have noted that the required balance is maintained in your account. No further action is needed."
     next: end
 
   - id: end

@@ -6,7 +6,9 @@ import com.hdfc.cern.workfloworch.activity.ActivityInput;
 import com.hdfc.cern.workfloworch.activity.OrchActivities;
 import com.hdfc.cern.workfloworch.customer.Customer;
 import com.hdfc.cern.workfloworch.definition.CampaignClock;
+import com.hdfc.cern.workfloworch.definition.ChannelResolver;
 import com.hdfc.cern.workfloworch.definition.Channels;
+import com.hdfc.cern.workfloworch.definition.ContactGuard;
 import com.hdfc.cern.workfloworch.definition.DurationParser;
 import com.hdfc.cern.workfloworch.definition.FeedbackTypes;
 import com.hdfc.cern.workfloworch.definition.RunPaths;
@@ -52,6 +54,21 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 					.setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(3).build())
 					.build());
 
+	/**
+	 * The contactGuard read. A database that is briefly down must not end campaigns or let a reminder through
+	 * unchecked, so this keeps retrying (with growing pauses, at most a minute apart) until the read works.
+	 */
+	private final OrchActivities guardActivities = Workflow.newActivityStub(
+			OrchActivities.class,
+			ActivityOptions.newBuilder()
+					.setStartToCloseTimeout(Duration.ofSeconds(30))
+					.setRetryOptions(RetryOptions.newBuilder()
+							.setInitialInterval(Duration.ofSeconds(2))
+							.setMaximumInterval(Duration.ofMinutes(1))
+							.setDoNotRetry("BadGuardColumn")
+							.build())
+					.build());
+
 	/** Feedback signals that arrived and have not been consumed by an await-feedback step yet. */
 	private final ArrayDeque<FeedbackSignal> pending = new ArrayDeque<>();
 	/** Run variables the YAML can read (see {@link RunPaths}); only ever holds non-null values. */
@@ -61,6 +78,9 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 	/** Channels of the contacts made so far, for the one-line campaign summary. */
 	private final java.util.List<String> contactChannels = new java.util.ArrayList<>();
 	private boolean windowExpired;
+	private WorkflowDefinition definition;
+	/** What the channel rules said to do after the latest feedback (see {@link ChannelResolver}); null before any feedback. */
+	private String channelAction;
 	/** Named counters of the run (see the count step); a counter that was never touched is 0. */
 	private final Map<String, Integer> counters = new HashMap<>();
 
@@ -83,7 +103,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 			}
 		}
 		String channel = signal.channel() == null || signal.channel().isBlank() ? null : signal.channel().trim().toUpperCase();
-		if (channel != null && !Channels.ALL.contains(channel)) {
+		if (channel != null && !(definition == null ? Channels.ALL : definition.knownChannels()).contains(channel)) {
 			info(line(LogEvents.WF_FEEDBACK_DROPPED, "workflowId", Workflow.getInfo().getWorkflowId(),
 					"reason", "BAD_CHANNEL_IGNORED", "channel", channel));
 			channel = null;
@@ -93,6 +113,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 
 	@Override
 	public void run(WorkflowDefinition definition, WorkflowInput input) {
+		this.definition = definition;
 		String workflowId = Workflow.getInfo().getWorkflowId();
 		Customer customer = input.customer();
 		long startedAt = Workflow.currentTimeMillis();
@@ -247,11 +268,30 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 		if (windowClosed()) {
 			return WINDOW_EXPIRED;
 		}
-		String channel = channelOf(step.getChannel(), customer);
-		if (channel == null) {
-			channel = channelOf(step.getDefaultChannel(), customer);
+		ContactGuard guard = definition.getContactGuard();
+		if (guard != null && guard.appliesTo(step.getId())) {
+			String workflowId = Workflow.getInfo().getWorkflowId();
+			boolean met = guardActivities.checkCustomerFlag(new ActivityInput(step.getId(), customer, Map.of("column", guard.getColumn())));
+			info(line(LogEvents.WF_GUARD_CHECKED, "workflowId", workflowId, "stepId", step.getId(), "column", guard.getColumn(), "met", met));
+			if (met) {
+				info(line(LogEvents.WF_CONTACT_SKIPPED, "workflowId", workflowId, "stepId", step.getId(),
+						"reason", "GUARD_MET:" + guard.getColumn(), "goTo", guard.getOnMet()));
+				return guard.getOnMet();
+			}
 		}
-		if (channel == null || !Channels.ALL.contains(channel)) {
+		String channel;
+		if (Channels.AUTO.equals(step.getChannel())) {
+			channel = ChannelResolver.resolve(definition, step.getId(), customer.initialChannel(),
+					variables.get(RunPaths.LAST_CHANNEL), channelAction, variables.get(RunPaths.FEEDBACK_CHANNEL));
+			info(line(LogEvents.WF_CHANNEL_CHOSEN, "workflowId", Workflow.getInfo().getWorkflowId(), "stepId", step.getId(),
+					"channel", channel, "action", channelAction == null ? "FIRST" : channelAction));
+		} else {
+			channel = channelOf(step.getChannel(), customer);
+			if (channel == null) {
+				channel = channelOf(step.getDefaultChannel(), customer);
+			}
+		}
+		if (channel == null || !definition.knownChannels().contains(channel)) {
 			throw fail("No usable channel for step '" + step.getId() + "' (" + step.getChannel() + "=" + channel + ")", "NoChannel");
 		}
 		// Feedback that arrived before this contact belongs to an older contact: drop it.
@@ -281,7 +321,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 		if (literalOrPath == null) {
 			return null;
 		}
-		return Channels.ALL.contains(literalOrPath) ? literalOrPath : RunPaths.resolve(literalOrPath, customer, variables);
+		return definition.knownChannels().contains(literalOrPath) ? literalOrPath : RunPaths.resolve(literalOrPath, customer, variables);
 	}
 
 	/**
@@ -321,6 +361,7 @@ public class YamlWorkflowImpl implements YamlWorkflow {
 		put(RunPaths.FEEDBACK_TYPE, feedback.type());
 		put(RunPaths.FEEDBACK_REMIND_AFTER, feedback.remindAfter());
 		put(RunPaths.FEEDBACK_CHANNEL, feedback.channel());
+		channelAction = ChannelResolver.actionFor(definition, feedback.type());
 		if (FeedbackTypes.REMIND_LATER.equals(feedback.type())) {
 			if (feedback.remindAfter() != null) {
 				put(RunPaths.REMINDER_AFTER, feedback.remindAfter());
