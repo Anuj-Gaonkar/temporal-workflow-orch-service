@@ -1,0 +1,38 @@
+sequenceDiagram
+  autonumber
+  actor C as Customer on WhatsApp
+  participant WA as whatsapp-flows-service
+  participant API as Orchestrator API
+  participant TS as Temporal server
+  participant TQ as Task Queue CERN_WORKFLOW_ORCH
+  participant W as Worker (YamlWorkflowImpl)
+
+  Note over C,W: The workflow is inside await-day1: a 9 minute timer is running (3d scaled to demo time)
+
+  C->>WA: taps the answer in the Flow
+  WA->>WA: webhook, map the answer to a feedback type
+  WA->>API: POST /workflows/OUTREACH_20_DAY-C1002/feedback
+  API->>TS: SignalWorkflow feedback(type, remindAfter, channel)
+  Note over TS: history gets WorkflowExecutionSignaled
+  TS->>TQ: schedule Workflow Task
+  TQ-->>W: Workflow Task
+  Note over W: feedback() adds the signal to the pending queue, await() sees it
+  W->>TS: command CancelTimer (the 9 minute timer)
+
+  alt POSITIVE
+    W->>TS: ScheduleActivityTask sendMessage thank-you
+    TS->>TQ: Activity Task
+    TQ-->>W: Activity Task, WhatsApp text sent
+    W->>TS: command CompleteWorkflowExecution
+  else REMIND_LATER with remindAfter 3d
+    W->>TS: command StartTimer 9 min (3d scaled)
+    TS->>TQ: TimerFired, Workflow Task
+    W->>TS: ScheduleActivityTask sendMessage remind-day1
+    W->>TS: StartTimer 3 min (1d to answer the reminder)
+    Note over W: then continues with the next scheduled contact
+  else INCONCLUSIVE or no answer in time
+    Note over W: no command for the switch step, goes straight to wait-day-4
+    W->>TS: command StartTimer until Day 4
+  end
+
+  Note over W,TS: Before every later contact the worker runs the guard activity checkCustomerFlag<br/>If balance_maintained is true the contact is skipped and thank-you-balance is sent

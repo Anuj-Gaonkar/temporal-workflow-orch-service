@@ -1,0 +1,42 @@
+sequenceDiagram
+  autonumber
+  actor Op as Operator
+  participant API as Orchestrator API
+  participant DB as Postgres orch.customers
+  participant TS as Temporal server
+  participant TQ as Task Queue CERN_WORKFLOW_ORCH
+  participant W as Worker in the same app
+  participant WA as whatsapp-flows-service
+  actor C as Customer on WhatsApp
+
+  Note over Op,C: Everything below uses WhatsApp for every channel. Demo clock: 1 campaign day = 3 minutes
+
+  Op->>API: POST /workflows/start (customerId, definition)
+  API->>API: find the YAML definition in memory
+  API->>DB: SELECT the customer row
+  DB-->>API: customer snapshot
+  API->>API: checkChannel (is the customer's channel declared in the YAML?)
+  API->>TS: StartWorkflowExecution id OUTREACH_20_DAY-C1002, input = definition + customer
+  TS-->>API: runId
+  API-->>Op: 200 workflowId + runId
+  Note over TS: history gets WorkflowExecutionStarted
+
+  TS->>TQ: schedule a Workflow Task
+  W->>TQ: long-poll (waiting for work)
+  TQ-->>W: Workflow Task with history
+  Note over W: run() starts the step pointer at wait-day-1
+  W->>TS: command StartTimer 3 min (untilDay 1)
+  Note over W,TS: Worker is now idle. The workflow costs nothing while the timer runs
+
+  TS->>TQ: TimerFired, schedule Workflow Task (t = 3 min)
+  TQ-->>W: Workflow Task, replay history, continue at contact-day1
+  W->>TS: command ScheduleActivityTask sendMessage (no guard check on Day 1)
+  TS->>TQ: Activity Task
+  TQ-->>W: Activity Task sendMessage
+  W->>WA: POST /internal/flows/send (waId, flowKey, text, customerId, workflowId)
+  WA->>C: WhatsApp message with the answer Flow
+  W->>TS: RespondActivityTaskCompleted
+  TS->>TQ: schedule Workflow Task
+  TQ-->>W: Workflow Task
+  W->>TS: command StartTimer 9 min (await-day1, timeout 3d)
+  Note over W,TS: Waiting for the customer's answer or the timer, whichever comes first

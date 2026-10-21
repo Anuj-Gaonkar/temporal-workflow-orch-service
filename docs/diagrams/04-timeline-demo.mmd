@@ -1,0 +1,22 @@
+gantt
+  title Silent customer in demo mode (1 campaign day = 3 minutes, whole run 63 minutes)
+  dateFormat  YYYY-MM-DD HH:mm
+  axisFormat  %H:%M
+  tickInterval 6minute
+  section Waiting (Temporal timers)
+  wait-day-1 timer        :w1, 2000-01-01 00:00, 3m
+  await-day1 9m           :a1, after c1, 9m
+  await-day4 9m           :a4, after c4, 9m
+  await-day7 9m           :a7, after c7, 9m
+  await-day10 15m         :a10, after c10, 15m
+  await-day15 15m         :a15, after c15, 15m
+  await-final             :af, after c20, 3m
+  section WhatsApp messages sent
+  Day 1 contact           :milestone, c1, 2000-01-01 00:03, 0m
+  Day 4 contact           :milestone, c4, 2000-01-01 00:12, 0m
+  Day 7 contact           :milestone, c7, 2000-01-01 00:21, 0m
+  Day 10 contact          :milestone, c10, 2000-01-01 00:30, 0m
+  Day 15 contact          :milestone, c15, 2000-01-01 00:45, 0m
+  Day 20 final notices    :milestone, c20, 2000-01-01 01:00, 0m
+  section Campaign window
+  Window closed at minute 63 :crit, wc, 2000-01-01 01:00, 3m

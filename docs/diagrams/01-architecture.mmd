@@ -1,0 +1,34 @@
+flowchart TB
+  OP["Operator<br/>curl / Swagger"]
+
+  subgraph ORCH["temporal-workflow-orch-service (one Spring Boot app, port 8196)"]
+    direction LR
+    API["REST API<br/>start, start-all, feedback, terminate"]
+    WORKER["Worker<br/>YamlWorkflowImpl runs workflow tasks<br/>OrchActivitiesImpl runs activity tasks"]
+    YAML[("workflow-definitions/*.yaml<br/>hot reloaded")]
+    YAML -.-> API
+  end
+
+  subgraph TEMPORAL["Temporal server (gRPC 7235, UI 8190)"]
+    direction LR
+    TQ{{"Task Queue CERN_WORKFLOW_ORCH<br/>holds workflow tasks and activity tasks"}}
+    HIST[("Event history<br/>timers, signals, results")]
+    TQ --- HIST
+  end
+
+  PG[("Shared Postgres 5437<br/>orch.customers")]
+  WAS["whatsapp-flows-service (8182)"]
+  CLOUD["WhatsApp Cloud API"]
+  CUST(["Customer's phone"])
+
+  OP -->|"1 REST call"| API
+  API -->|"2 read customer"| PG
+  API -->|"3 StartWorkflow, Signal, Terminate"| TQ
+  WORKER <-->|"4 long-poll, return commands"| TQ
+  WORKER -->|"5 guard: balance_maintained"| PG
+  WORKER -->|"6 POST /internal/flows/send or /internal/messages/text"| WAS
+  WAS -->|"7 send"| CLOUD
+  CLOUD -->|"8 message"| CUST
+  CUST -->|"9 taps Flow answer"| CLOUD
+  CLOUD -->|"10 webhook"| WAS
+  WAS -->|"11 POST /workflows/id/feedback"| API
