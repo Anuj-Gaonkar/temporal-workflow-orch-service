@@ -1,0 +1,26 @@
+# Load-test override for the Temporal stack. Use it together with docker-compose.yml (that file is not edited):
+#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d
+# Adds what Prometheus needs and nothing else (no Temporal tuning, so a baseline runs on the stock settings):
+#   - Temporal server metrics on host port 9464 (container port 8000)
+#   - a postgres_exporter for Temporal's own Postgres on host port 9188
+# Both live in this project on purpose: `docker compose down -v` (what run_stage.py does between stages to start every
+# stage from an empty Temporal) removes them together with the data, and the monitoring stack
+# (docker-compose.monitoring.yml) is not touched by it.
+services:
+  temporal:
+    environment:
+      PROMETHEUS_ENDPOINT: 0.0.0.0:8000
+    ports:
+      - "9464:8000"
+
+  temporal-postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: cern-v2-orch-temporal-pg-exporter
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: postgresql://temporal:temporal@temporal-postgres:5432/temporal?sslmode=disable
+    ports:
+      - "9188:9187"
+    restart: unless-stopped

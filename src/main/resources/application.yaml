@@ -23,6 +23,13 @@ spring:
 server:
   port: ${SERVER_PORT:8196}   # flows service is 8182; older stacks use 8082, 8083, 8096
 
+# Only the Prometheus scrape endpoint (JVM, GC, threads, DB pool) is exposed, for the load-test dashboards.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus
+
 orch:
   # whatsapp-flows-service: how WHATSAPP contacts are really sent (plain HTTP, no auth).
   whatsapp:

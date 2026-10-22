@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: temporal-server
+    static_configs:
+      - targets: ["host.docker.internal:9464"]
+
+  - job_name: temporal-postgres
+    static_configs:
+      - targets: ["host.docker.internal:9188"]
+
+  - job_name: app-postgres
+    static_configs:
+      - targets: ["app-postgres-exporter:9187"]
+
+  - job_name: whatsapp-stub
+    static_configs:
+      - targets: ["host.docker.internal:8182"]
+
+  - job_name: resource-exporter
+    static_configs:
+      - targets: ["host.docker.internal:9323"]
+
+  - job_name: orch-app
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8196"]

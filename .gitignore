@@ -43,3 +43,5 @@ load-test/reports/
 load-test/.venv/
 .venv/
 load-test/snapshots/
+load-test/results/
+load-test/__pycache__/

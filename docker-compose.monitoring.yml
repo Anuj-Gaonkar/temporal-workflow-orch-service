@@ -1,0 +1,59 @@
+name: cern-v2-monitoring
+
+# Prometheus + Grafana for the load tests. Start it once and leave it running; it survives the Temporal resets that
+# run_stage.py does between stages because everything it scrapes is reached through published host ports:
+#   Temporal server metrics         host.docker.internal:9464   (docker-compose.loadtest.yml)
+#   Temporal Postgres exporter      host.docker.internal:9188   (docker-compose.loadtest.yml)
+#   App database exporter (here)    shared Postgres on host port 5437
+#   WhatsApp stub                   host.docker.internal:8182/metrics
+#   Resource exporter               host.docker.internal:9323 (load-test/resource_exporter.py: container and app CPU/memory)
+# Start:   docker compose -f docker-compose.monitoring.yml up -d
+# Grafana: http://localhost:3001  (dashboard "Load test"; login admin/admin, viewing needs no login)
+# Prometheus: http://localhost:9091
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: cern-v2-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=14d
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:9091:9090"
+    volumes:
+      - ./load-test/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: cern-v2-grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: light
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./load-test/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./load-test/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+  app-postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: cern-v2-app-pg-exporter
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DATA_SOURCE_NAME: postgresql://cern:cern@host.docker.internal:5437/cern_v2?sslmode=disable
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:
