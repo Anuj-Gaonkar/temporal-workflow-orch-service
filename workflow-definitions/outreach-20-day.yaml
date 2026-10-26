@@ -54,7 +54,7 @@ channelRules:
   onFeedback:
     NO_RESPONSE:  DEFAULT
     INCONCLUSIVE: SAME
-    REMIND_LATER: FLIP
+    REMIND_LATER: REQUESTED
 
 # Optional. Before every contact except the ones listed under "except", the workflow reads this boolean column of the
 # customer's row (orch.customers) fresh from the database. If it is true, the contact is NOT sent and the workflow goes
