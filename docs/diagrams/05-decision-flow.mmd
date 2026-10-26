@@ -1,25 +1,25 @@
 flowchart TD
-  START(["POST /workflows/start<br/>Demo minute 0"]) --> W1["wait-day-1<br/>StartTimer, fires at minute 3"]
+  START(["POST /workflows/start<br/>Day 0"]) --> W1["wait-day-1<br/>StartTimer, fires on Day 1 at 10:00 IST"]
   W1 --> C1["contact-day1<br/>WhatsApp message + Flow<br/>no balance check on the first contact"]
-  C1 --> A1["await-day1<br/>StartTimer 9 min<br/>+ waits for a feedback signal"]
+  C1 --> A1["await-day1<br/>StartTimer 3 days<br/>+ waits for a feedback signal"]
   A1 --> R1{"feedback?"}
 
   R1 -->|"POSITIVE"| TY["thank-you<br/>WhatsApp text"]
   TY --> END(["CompleteWorkflowExecution"])
 
-  R1 -->|"REMIND_LATER<br/>remindAfter 3d = 9 min"| WR["wait-remind-day1<br/>StartTimer 9 min"]
+  R1 -->|"REMIND_LATER<br/>remindAfter 3d"| WR["wait-remind-day1<br/>StartTimer 3 days (1 day if none asked)"]
   WR --> G1{"balance_maintained?<br/>activity checkCustomerFlag"}
   G1 -->|"true"| TYB["thank-you-balance<br/>WhatsApp text"]
   G1 -->|"false"| RM["remind-day1<br/>one reminder on WhatsApp"]
-  RM --> AR["await-remind-day1<br/>StartTimer 3 min"]
+  RM --> AR["await-remind-day1<br/>StartTimer 1 day"]
   AR --> NEXT
 
-  R1 -->|"INCONCLUSIVE<br/>NO_RESPONSE after 9 min"| NEXT["wait-day-4<br/>StartTimer until minute 12"]
+  R1 -->|"INCONCLUSIVE<br/>NO_RESPONSE after 3 days"| NEXT["wait-day-4<br/>StartTimer until Day 4, 10:00 IST"]
   NEXT --> G4{"balance_maintained?"}
   G4 -->|"true"| TYB
-  G4 -->|"false"| C4["contact-day4<br/>then the same cycle for<br/>Day 7 (min 21), Day 10 (min 30), Day 15 (min 45)"]
-  C4 --> FIN["wait-day-20 (minute 60)<br/>final notices on WhatsApp<br/>count steps and await-final"]
-  FIN --> EXP(["Window closes at minute 63<br/>or a step would cross it<br/>CompleteWorkflowExecution"])
+  G4 -->|"false"| C4["contact-day4<br/>then the same cycle for<br/>Day 7, Day 10 and Day 15"]
+  C4 --> FIN["wait-day-20 (Day 20, 10:00 IST)<br/>final notices on WhatsApp<br/>count steps and await-final"]
+  FIN --> EXP(["Window closes at the end of Day 20<br/>or a step would cross it<br/>CompleteWorkflowExecution"])
   TYB --> END
 
   OPS["POST /workflows/id/terminate"] -.->|"TerminateWorkflowExecution<br/>any time"| END2(["Workflow Terminated"])
