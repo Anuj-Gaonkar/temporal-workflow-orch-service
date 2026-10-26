@@ -3,6 +3,7 @@
 | Doc | What it is |
 |---|---|
 | [`yaml-guide.md`](yaml-guide.md) | The YAML definition format. A living doc; each feature notes the phase that added it. Start here if you want to write or change a definition. |
+| [`temporal-internals.md`](temporal-internals.md) | How Temporal works inside (server services, tasks, replay, timers, signals, failures), tied to the architecture diagram, plus a walkthrough of every diagram in `diagrams/`. Recommended first read for anyone new to Temporal. |
 | [`phase-2/01-coding.md`](phase-2/01-coding.md) | What Phase 2 changed: campaign window, feedback signal, new step types, hot reload, tests, and the **new log events**. |
 | [`phase-2/02-decisions.md`](phase-2/02-decisions.md) | Decisions D34 onward (feedback via signal, Day 0/Day 1/15 days, run variables, `dayLength`, hot reload, ...). |
 | [`phase-2/03-architecture.md`](phase-2/03-architecture.md) | What Phase 2 adds to the architecture: sequences, where the window is checked, failure behaviour. |
