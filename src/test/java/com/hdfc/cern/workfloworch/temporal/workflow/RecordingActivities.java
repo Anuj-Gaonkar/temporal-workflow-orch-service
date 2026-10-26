@@ -24,7 +24,7 @@ class RecordingActivities implements OrchActivities {
 		public void sendText(String waId, String message) {
 			texts.add(waId + ":" + message);
 		}
-	}, (customerId, column) -> false);
+	}, new com.hdfc.cern.workfloworch.service.FakeCustomerService());
 	private final LongSupplier clock;
 	final List<Call> calls = new CopyOnWriteArrayList<>();
 	final List<String> flows = new CopyOnWriteArrayList<>();

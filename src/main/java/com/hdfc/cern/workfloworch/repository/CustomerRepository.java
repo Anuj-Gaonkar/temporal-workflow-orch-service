@@ -1,14 +1,8 @@
 package com.hdfc.cern.workfloworch.repository;
 
-import com.hdfc.cern.workfloworch.model.Customer;
-import java.util.List;
-import java.util.Optional;
+import com.hdfc.cern.workfloworch.entity.CustomerEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-/** Read-only access to orch.customers. The service never inserts or updates. */
-public interface CustomerRepository {
-
-	Optional<Customer> findById(String customerId);
-
-	/** Every customer, ordered by id. */
-	List<Customer> findAll();
+/** Access to orch.customers. Only the read methods are used: the service never inserts or updates. */
+public interface CustomerRepository extends JpaRepository<CustomerEntity, String> {
 }

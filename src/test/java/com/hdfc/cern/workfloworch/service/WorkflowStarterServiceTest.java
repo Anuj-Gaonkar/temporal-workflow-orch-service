@@ -9,37 +9,23 @@ import com.hdfc.cern.workfloworch.dto.StartResult;
 import com.hdfc.cern.workfloworch.exception.StartRejectedException;
 import com.hdfc.cern.workfloworch.exception.StartRejectedException.Reason;
 import com.hdfc.cern.workfloworch.model.Customer;
-import com.hdfc.cern.workfloworch.repository.CustomerRepository;
 import com.hdfc.cern.workfloworch.temporal.activity.NoOpWhatsAppGateway;
 import com.hdfc.cern.workfloworch.temporal.activity.OrchActivitiesImpl;
 import com.hdfc.cern.workfloworch.temporal.workflow.OrchTaskQueue;
 import com.hdfc.cern.workfloworch.temporal.workflow.YamlWorkflowImpl;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class WorkflowStarterServiceTest {
 
-	/** Hand-written fake, test sources only. */
-	private static final class FakeCustomers implements CustomerRepository {
-		private final Map<String, Customer> rows = new java.util.TreeMap<>(Map.of(
+	private static FakeCustomerService fakeCustomers() {
+		return new FakeCustomerService(Map.of(
 				"C1001", new Customer("C1001", "Test One", "+910000000001", "910000000001", "VOICE"),
 				"C1002", new Customer("C1002", "Test Two", "+910000000002", "910000000001", "WHATSAPP")));
-
-		@Override
-		public List<Customer> findAll() {
-			return List.copyOf(rows.values());
-		}
-
-		@Override
-		public Optional<Customer> findById(String customerId) {
-			return Optional.ofNullable(rows.get(customerId));
-		}
 	}
 
 	private TestWorkflowEnvironment env;
@@ -52,9 +38,9 @@ class WorkflowStarterServiceTest {
 		env = TestWorkflowEnvironment.newInstance();
 		Worker worker = env.newWorker(OrchTaskQueue.NAME);
 		worker.registerWorkflowImplementationTypes(YamlWorkflowImpl.class);
-		worker.registerActivitiesImplementations(new OrchActivitiesImpl(new com.hdfc.cern.workfloworch.temporal.activity.NoOpWhatsAppGateway(), (id, column) -> false));
+		worker.registerActivitiesImplementations(new OrchActivitiesImpl(new com.hdfc.cern.workfloworch.temporal.activity.NoOpWhatsAppGateway(), new FakeCustomerService()));
 		env.start();
-		starter = new WorkflowStarterService(env.getWorkflowClient(), loader, new FakeCustomers());
+		starter = new WorkflowStarterService(env.getWorkflowClient(), loader, fakeCustomers());
 	}
 
 	@AfterEach
@@ -103,7 +89,7 @@ class WorkflowStarterServiceTest {
 
 	@Test
 	void aCustomerChannelTheDefinitionDoesNotDeclareIs422AndStartAllCountsItAsFailed() {
-		FakeCustomers customers = new FakeCustomers();
+		FakeCustomerService customers = fakeCustomers();
 		customers.rows.put("C1003", new Customer("C1003", "Test Three", "+910000000003", "910000000003", "CHAT_BOT"));
 		DefinitionLoader loader = new DefinitionLoader("workflow-definitions");
 		loader.load();

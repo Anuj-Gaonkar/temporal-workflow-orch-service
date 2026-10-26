@@ -34,7 +34,7 @@ class TerminationServiceTest {
 		env = TestWorkflowEnvironment.newInstance();
 		Worker worker = env.newWorker(OrchTaskQueue.NAME);
 		worker.registerWorkflowImplementationTypes(YamlWorkflowImpl.class);
-		worker.registerActivitiesImplementations(new OrchActivitiesImpl(new com.hdfc.cern.workfloworch.temporal.activity.NoOpWhatsAppGateway(), (id, column) -> false));
+		worker.registerActivitiesImplementations(new OrchActivitiesImpl(new com.hdfc.cern.workfloworch.temporal.activity.NoOpWhatsAppGateway(), new FakeCustomerService()));
 		env.start();
 		DefinitionLoader loader = new DefinitionLoader("workflow-definitions");
 		loader.load();

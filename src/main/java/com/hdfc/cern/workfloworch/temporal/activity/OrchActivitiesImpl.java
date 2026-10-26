@@ -2,9 +2,9 @@ package com.hdfc.cern.workfloworch.temporal.activity;
 
 import static com.hdfc.cern.workfloworch.logging.LogEvents.line;
 
-import com.hdfc.cern.workfloworch.repository.CustomerFlags;
 import com.hdfc.cern.workfloworch.logging.ConversationLog;
 import com.hdfc.cern.workfloworch.logging.LogEvents;
+import com.hdfc.cern.workfloworch.service.CustomerService;
 import com.hdfc.cern.workfloworch.temporal.workflow.OrchTaskQueue;
 import io.temporal.activity.Activity;
 import io.temporal.activity.ActivityInfo;
@@ -28,11 +28,11 @@ public class OrchActivitiesImpl implements OrchActivities {
 	@Value("${orch.whatsapp.tag-messages:false}")
 	private boolean tagMessages;
 
-	private final CustomerFlags flags;
+	private final CustomerService customers;
 
-	public OrchActivitiesImpl(WhatsAppGateway whatsApp, CustomerFlags flags) {
+	public OrchActivitiesImpl(WhatsAppGateway whatsApp, CustomerService customers) {
 		this.whatsApp = whatsApp;
-		this.flags = flags;
+		this.customers = customers;
 	}
 
 	private static final org.slf4j.Logger conversation = org.slf4j.LoggerFactory.getLogger(ConversationLog.LOGGER);
@@ -62,7 +62,7 @@ public class OrchActivitiesImpl implements OrchActivities {
 		boolean[] result = new boolean[1];
 		run(CHECK_CUSTOMER_FLAG, input, () -> {
 			try {
-				result[0] = flags.isSet(input.customer().customerId(), param(input, "column"));
+				result[0] = customers.isFlagSet(input.customer().customerId(), param(input, "column"));
 			} catch (IllegalArgumentException e) {
 				// a column that is not allowed will not become allowed by retrying
 				throw ApplicationFailure.newNonRetryableFailure(e.getMessage(), "BadGuardColumn");

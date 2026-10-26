@@ -20,6 +20,13 @@ spring:
     username: ${APP_DB_USER:cern}
     password: ${APP_DB_PASSWORD:cern}
 
+  # JPA only reads orch.customers (CustomerEntity is @Immutable). Hibernate must never touch the hand-managed schema,
+  # and no session is kept open for the web request (every read happens inside CustomerService).
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+
 server:
   port: ${SERVER_PORT:8196}   # flows service is 8182; older stacks use 8082, 8083, 8096
 

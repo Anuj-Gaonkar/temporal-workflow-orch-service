@@ -10,7 +10,6 @@ import com.hdfc.cern.workfloworch.exception.StartRejectedException;
 import com.hdfc.cern.workfloworch.exception.StartRejectedException.Reason;
 import com.hdfc.cern.workfloworch.logging.LogEvents;
 import com.hdfc.cern.workfloworch.model.Customer;
-import com.hdfc.cern.workfloworch.repository.CustomerRepository;
 import com.hdfc.cern.workfloworch.temporal.workflow.OrchTaskQueue;
 import com.hdfc.cern.workfloworch.temporal.workflow.WorkflowInput;
 import com.hdfc.cern.workfloworch.temporal.workflow.YamlWorkflow;
@@ -35,9 +34,9 @@ public class WorkflowStarterService {
 
 	private final WorkflowClient workflowClient;
 	private final DefinitionLoader definitions;
-	private final CustomerRepository customers;
+	private final CustomerService customers;
 
-	public WorkflowStarterService(WorkflowClient workflowClient, DefinitionLoader definitions, CustomerRepository customers) {
+	public WorkflowStarterService(WorkflowClient workflowClient, DefinitionLoader definitions, CustomerService customers) {
 		this.workflowClient = workflowClient;
 		this.definitions = definitions;
 		this.customers = customers;

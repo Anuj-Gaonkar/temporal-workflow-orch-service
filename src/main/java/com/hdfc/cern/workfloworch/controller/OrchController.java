@@ -13,7 +13,7 @@ import com.hdfc.cern.workfloworch.dto.TerminateRequest;
 import com.hdfc.cern.workfloworch.dto.TerminateResult;
 import com.hdfc.cern.workfloworch.exception.NotFoundException;
 import com.hdfc.cern.workfloworch.model.Customer;
-import com.hdfc.cern.workfloworch.repository.CustomerRepository;
+import com.hdfc.cern.workfloworch.service.CustomerService;
 import com.hdfc.cern.workfloworch.service.FeedbackService;
 import com.hdfc.cern.workfloworch.service.TerminationService;
 import com.hdfc.cern.workfloworch.service.WorkflowStarterService;
@@ -43,11 +43,11 @@ public class OrchController {
 	private final FeedbackService feedback;
 	private final TerminationService termination;
 	private final DefinitionLoader definitions;
-	private final CustomerRepository customers;
+	private final CustomerService customers;
 	private final WorkflowClient workflowClient;
 
 	public OrchController(WorkflowStarterService starter, FeedbackService feedback, TerminationService termination, DefinitionLoader definitions,
-			CustomerRepository customers,
+			CustomerService customers,
 			WorkflowClient workflowClient) {
 		this.starter = starter;
 		this.feedback = feedback;
