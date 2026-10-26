@@ -18,7 +18,7 @@ A small proof of concept that starts a **Temporal workflow per customer, defined
 
 **Channel rules (optional, in the YAML).** A contact with `channel: AUTO` takes its channel from `channelDefaults` (per DB channel, per contact step) and `channelRules` (what each feedback type does to the next channel: `DEFAULT`, `SAME`, `FLIP`, `REQUESTED`). See [`docs/yaml-guide.md`](docs/yaml-guide.md) and `workflow-definitions/outreach-20-day.yaml`.
 
-Docs are in [`docs/`](docs/README.md).
+Docs are in [`docs/`](docs/README.md). Writing a definition? Start with [`docs/yaml-rules.md`](docs/yaml-rules.md) (the rules and a checklist), then [`docs/yaml-guide.md`](docs/yaml-guide.md).
 
 ## Profiles: dev (minutes) and prod (days)
 
@@ -103,6 +103,8 @@ Tables are in schema `public`. The app's data (`orch.customers`) is in the share
 | `POST /workflows/start-all` | Body `{"definition"}`. Starts it for **every** customer in the table, one after another; returns 202 with counts and one result per customer (`STARTED`, `ALREADY_RUNNING`, `FAILED`). 400 / 404 `DEFINITION_NOT_FOUND` |
 | `POST /workflows/{workflowId}/feedback` | Customer feedback for a running workflow (signal). Body `{"type","remindAfter","channel"}`; `type` is `POSITIVE`, `REMIND_LATER`, `NO_RESPONSE` or `INCONCLUSIVE`; `remindAfter` (`2d`, `3h`) and `channel` (`WHATSAPP`, `VOICE`, `SMS`) are optional and only for `REMIND_LATER`. 202, 400 `BAD_REQUEST`, 404 `WORKFLOW_NOT_FOUND`. Send it **after** the contact it answers: feedback that arrives when no contact is waiting is dropped (logged). |
 | `POST /workflow-definitions/reload` | Rescan the YAML folder now. Returns `{changed, removed, errors}`; a broken file keeps its previous version live. Running workflows keep their definition. |
+| `POST /workflows/{workflowId}/terminate` | Stops one running workflow. It stays in Temporal as Terminated (audit record). Optional body `{"reason"}`; 404 when unknown or already finished. |
+| `POST /workflows/terminate-all` | Stops every running workflow, or only one definition's. Optional body `{"reason","definition"}`. History is kept. |
 | `GET /workflows/{workflowId}` | Status via Temporal (RUNNING, COMPLETED, ...) |
 | `GET /customers/{customerId}` | Read-only view of the customer row |
 

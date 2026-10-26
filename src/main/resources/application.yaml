@@ -12,6 +12,14 @@ spring:
     workers-auto-discovery:
       packages:
         - com.hdfc.cern.workfloworch
+    # Worker capacity for the load test (label workers-400); the baseline used the SDK defaults.
+    workers:
+      - task-queue: CERN_WORKFLOW_ORCH
+        capacity:
+          max-concurrent-activity-executors: 400
+          max-concurrent-workflow-task-executors: 400
+          max-concurrent-activity-task-pollers: 20
+          max-concurrent-workflow-task-pollers: 20
 
   # Shared Postgres (../docker-compose.yml, host port 5437), database cern_v2, own schema orch. The service only READS orch.customers;
   # the schema and default customers are created by hand from db/*.sql.

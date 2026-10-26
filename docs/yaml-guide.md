@@ -3,6 +3,8 @@
 A definition file in `workflow-definitions/*.yaml` is the whole script of a workflow. One generic workflow class interprets it; the customer data
 comes from the database, never from the YAML. Definitions are read at startup (since phase 1) and **rescanned while the app runs** (since phase 2, see "Hot reload").
 
+For the rules on one page and a checklist to run before saving a file, see [`yaml-rules.md`](yaml-rules.md).
+
 ## How customer data reaches the workflow
 
 `customers table (orch.customers)` -> `CustomerRepository.findById` at start time -> `WorkflowInput.customer` (snapshot) -> the workflow.
