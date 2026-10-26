@@ -6,8 +6,9 @@ sequenceDiagram
   participant TS as Temporal server
   participant TQ as Task Queue CERN_WORKFLOW_ORCH
   participant W as Worker (YamlWorkflowImpl)
+  participant DB as Postgres orch.customers
 
-  Note over C,W: The workflow is inside await-day1: a 9 minute timer is running (3d scaled to demo time)
+  Note over C,W: The workflow is inside await-day1: a 3 day timer is running (until the next scheduled contact, Day 4)
 
   C->>WA: taps the answer in the Flow
   WA->>WA: webhook, map the answer to a feedback type
@@ -17,7 +18,7 @@ sequenceDiagram
   TS->>TQ: schedule Workflow Task
   TQ-->>W: Workflow Task
   Note over W: feedback() adds the signal to the pending queue, await() sees it
-  W->>TS: command CancelTimer (the 9 minute timer)
+  W->>TS: command CancelTimer (the 3 day timer)
 
   alt POSITIVE
     W->>TS: ScheduleActivityTask sendMessage thank-you
@@ -25,14 +26,25 @@ sequenceDiagram
     TQ-->>W: Activity Task, WhatsApp text sent
     W->>TS: command CompleteWorkflowExecution
   else REMIND_LATER with remindAfter 3d
-    W->>TS: command StartTimer 9 min (3d scaled)
+    W->>TS: command StartTimer 3 days (remindAfter 3d, 1 day if none asked)
     TS->>TQ: TimerFired, Workflow Task
-    W->>TS: ScheduleActivityTask sendMessage remind-day1
-    W->>TS: StartTimer 3 min (1d to answer the reminder)
-    Note over W: then continues with the next scheduled contact
+    W->>TS: ScheduleActivityTask checkCustomerFlag (contactGuard)
+    TS->>TQ: Activity Task
+    TQ-->>W: Activity Task checkCustomerFlag
+    W->>DB: SELECT balance_maintained for the customer
+    DB-->>W: true or false
+    alt balance_maintained is true
+      W->>TS: ScheduleActivityTask sendMessage thank-you-balance
+      W->>TS: command CompleteWorkflowExecution
+    else false
+      W->>TS: ScheduleActivityTask sendMessage remind-day1
+      W->>TS: StartTimer 1 day (to answer the reminder)
+      Note over W: then continues with the next scheduled contact
+    end
   else INCONCLUSIVE or no answer in time
     Note over W: no command for the switch step, goes straight to wait-day-4
-    W->>TS: command StartTimer until Day 4
+    W->>TS: command StartTimer until Day 4, 10:00 IST
+    Note over W,DB: at Day 4 the same checkCustomerFlag read runs before contact-day4
   end
 
-  Note over W,TS: Before every later contact the worker runs the guard activity checkCustomerFlag<br/>If balance_maintained is true the contact is skipped and thank-you-balance is sent
+  Note over W,TS: Before every contact except Day 1 the worker runs the contactGuard activity checkCustomerFlag, a fresh read of balance_maintained<br/>If it is true the contact is skipped and thank-you-balance is sent

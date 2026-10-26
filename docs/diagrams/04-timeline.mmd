@@ -1,0 +1,22 @@
+gantt
+  title Silent customer over 20 days (axis = campaign day, contacts at 10:00 IST)
+  dateFormat  YYYY-MM-DD HH:mm
+  axisFormat  %-H
+  tickInterval 1hour
+  section Waiting (Temporal timers)
+  wait-day-1 timer        :w1, 2000-01-01 00:00, 1h
+  await-day1 3 days       :a1, after c1, 3h
+  await-day4 3 days       :a4, after c4, 3h
+  await-day7 3 days       :a7, after c7, 3h
+  await-day10 5 days      :a10, after c10, 5h
+  await-day15 5 days      :a15, after c15, 5h
+  await-final 1 day       :af, after c20, 1h
+  section WhatsApp messages sent
+  Day 1 contact           :milestone, c1, 2000-01-01 01:00, 0m
+  Day 4 contact           :milestone, c4, 2000-01-01 04:00, 0m
+  Day 7 contact           :milestone, c7, 2000-01-01 07:00, 0m
+  Day 10 contact          :milestone, c10, 2000-01-01 10:00, 0m
+  Day 15 contact          :milestone, c15, 2000-01-01 15:00, 0m
+  Day 20 final notices    :milestone, c20, 2000-01-01 20:00, 0m
+  section Campaign window
+  Window closes at the end of Day 20 :crit, wc, 2000-01-01 20:00, 1h

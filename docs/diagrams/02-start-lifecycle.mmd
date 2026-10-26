@@ -9,7 +9,7 @@ sequenceDiagram
   participant WA as whatsapp-flows-service
   actor C as Customer on WhatsApp
 
-  Note over Op,C: Everything below uses WhatsApp for every channel. Demo clock: 1 campaign day = 3 minutes
+  Note over Op,C: Everything below uses WhatsApp for every channel. Real clock: Day 0 is the day it is triggered, contacts go out at 10:00 IST
 
   Op->>API: POST /workflows/start (customerId, definition)
   API->>API: find the YAML definition in memory
@@ -25,12 +25,12 @@ sequenceDiagram
   W->>TQ: long-poll (waiting for work)
   TQ-->>W: Workflow Task with history
   Note over W: run() starts the step pointer at wait-day-1
-  W->>TS: command StartTimer 3 min (untilDay 1)
+  W->>TS: command StartTimer until Day 1, 10:00 IST (untilDay 1)
   Note over W,TS: Worker is now idle. The workflow costs nothing while the timer runs
 
-  TS->>TQ: TimerFired, schedule Workflow Task (t = 3 min)
+  TS->>TQ: TimerFired, schedule Workflow Task (Day 1, 10:00 IST)
   TQ-->>W: Workflow Task, replay history, continue at contact-day1
-  W->>TS: command ScheduleActivityTask sendMessage (no guard check on Day 1)
+  W->>TS: command ScheduleActivityTask sendMessage (first contact, so no contactGuard check)
   TS->>TQ: Activity Task
   TQ-->>W: Activity Task sendMessage
   W->>WA: POST /internal/flows/send (waId, flowKey, text, customerId, workflowId)
@@ -38,5 +38,5 @@ sequenceDiagram
   W->>TS: RespondActivityTaskCompleted
   TS->>TQ: schedule Workflow Task
   TQ-->>W: Workflow Task
-  W->>TS: command StartTimer 9 min (await-day1, timeout 3d)
+  W->>TS: command StartTimer 3 days (await-day1, timeout 3d)
   Note over W,TS: Waiting for the customer's answer or the timer, whichever comes first

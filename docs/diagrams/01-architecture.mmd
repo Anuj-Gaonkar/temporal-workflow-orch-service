@@ -11,9 +11,16 @@ flowchart TB
 
   subgraph TEMPORAL["Temporal server (gRPC 7235, UI 8190)"]
     direction LR
-    TQ{{"Task Queue CERN_WORKFLOW_ORCH<br/>holds workflow tasks and activity tasks"}}
-    HIST[("Event history<br/>timers, signals, results")]
-    TQ --- HIST
+    UI["Temporal UI<br/>browse workflows and history"]
+    FE["Frontend service<br/>gRPC entry point"]
+    HS["History service<br/>appends events, fires timers"]
+    MS{{"Matching service<br/>Task Queue CERN_WORKFLOW_ORCH<br/>workflow tasks and activity tasks"}}
+    TDB[("Temporal's own Postgres 5439<br/>history, timers, queued tasks")]
+    UI --> FE
+    FE -->|"state changes"| HS
+    FE -->|"long-poll"| MS
+    HS --> TDB
+    MS --> TDB
   end
 
   PG[("Shared Postgres 5437<br/>orch.customers")]
@@ -23,8 +30,8 @@ flowchart TB
 
   OP -->|"1 REST call"| API
   API -->|"2 read customer"| PG
-  API -->|"3 StartWorkflow, Signal, Terminate"| TQ
-  WORKER <-->|"4 long-poll, return commands"| TQ
+  API -->|"3 StartWorkflow, Signal, Terminate"| FE
+  WORKER <-->|"4 long-poll, return commands"| FE
   WORKER -->|"5 guard: balance_maintained"| PG
   WORKER -->|"6 POST /internal/flows/send or /internal/messages/text"| WAS
   WAS -->|"7 send"| CLOUD
