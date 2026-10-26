@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.hdfc.cern.workfloworch.definition.ContactGuard;
 import com.hdfc.cern.workfloworch.entity.CustomerEntity;
 import com.hdfc.cern.workfloworch.model.Customer;
 import com.hdfc.cern.workfloworch.repository.CustomerRepository;
@@ -52,6 +53,13 @@ class CustomerServiceImplTest {
 
 		assertThat(service.isFlagSet("C1001", "balance_maintained")).isTrue();
 		assertThat(service.isFlagSet("C1002", "balance_maintained")).isFalse();
+	}
+
+	@Test
+	void everyColumnTheYamlMayNameCanBeRead() {
+		when(repository.findById("C1001")).thenReturn(Optional.of(entity("C1001", true)));
+
+		ContactGuard.SUPPORTED_COLUMNS.forEach(column -> assertThat(service.isFlagSet("C1001", column)).isTrue());
 	}
 
 	@Test

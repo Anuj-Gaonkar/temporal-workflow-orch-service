@@ -20,11 +20,6 @@ public final class DefinitionValidator {
 	}
 
 	public static List<String> validate(WorkflowDefinition def, Set<String> knownActivities) {
-		return validate(def, knownActivities, ContactGuard.parseColumns(ContactGuard.DEFAULT_COLUMNS));
-	}
-
-	/** @param guardColumns the columns a {@code contactGuard} may read (the server's {@code orch.guard.allowed-columns}) */
-	public static List<String> validate(WorkflowDefinition def, Set<String> knownActivities, Set<String> guardColumns) {
 		List<String> errors = new ArrayList<>();
 		if (isBlank(def.getName())) {
 			errors.add("'name' is required");
@@ -61,7 +56,7 @@ public final class DefinitionValidator {
 		checkChannels(def, errors);
 		checkChannelDefaults(def, byId, errors);
 		checkChannelRules(def, errors);
-		checkContactGuard(def, byId, guardColumns, errors);
+		checkContactGuard(def, byId, errors);
 		boolean usesAuto = def.getSteps().stream().anyMatch(s -> s != null && Channels.AUTO.equals(s.getChannel()));
 		if (!usesAuto && (def.getChannelDefaults() != null || def.getChannelRules() != null)) {
 			errors.add("'channelDefaults' / 'channelRules' are defined but no contact step uses 'channel: AUTO'");
@@ -73,8 +68,8 @@ public final class DefinitionValidator {
 		return errors;
 	}
 
-	/** contactGuard: an allowed column, an existing contact step to go to, and existing contact steps to leave unchecked. */
-	private static void checkContactGuard(WorkflowDefinition def, Map<String, StepDefinition> byId, Set<String> guardColumns,
+	/** contactGuard: a supported column, an existing contact step to go to, and existing contact steps to leave unchecked. */
+	private static void checkContactGuard(WorkflowDefinition def, Map<String, StepDefinition> byId,
 			List<String> errors) {
 		ContactGuard guard = def.getContactGuard();
 		if (guard == null) {
@@ -82,9 +77,9 @@ public final class DefinitionValidator {
 		}
 		if (isBlank(guard.getColumn())) {
 			errors.add("contactGuard: 'column' is required");
-		} else if (!guardColumns.contains(guard.getColumn())) {
-			errors.add("contactGuard: column '" + guard.getColumn() + "' is not allowed (the server allows "
-					+ new java.util.TreeSet<>(guardColumns) + ", see orch.guard.allowed-columns)");
+		} else if (!ContactGuard.SUPPORTED_COLUMNS.contains(guard.getColumn())) {
+			errors.add("contactGuard: column '" + guard.getColumn() + "' is not supported (supported: "
+					+ new java.util.TreeSet<>(ContactGuard.SUPPORTED_COLUMNS) + ")");
 		}
 		if (isBlank(guard.getOnMet())) {
 			errors.add("contactGuard: 'onMet' is required (the contact step to go to when the flag is true)");

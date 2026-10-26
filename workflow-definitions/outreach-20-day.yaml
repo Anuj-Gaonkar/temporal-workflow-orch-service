@@ -59,7 +59,7 @@ channelRules:
 # Optional. Before every contact except the ones listed under "except", the workflow reads this boolean column of the
 # customer's row (orch.customers) fresh from the database. If it is true, the contact is NOT sent and the workflow goes
 # to onMet instead (a thank-you, then the end). The first contact is never checked, so every customer is contacted once.
-# The column must be allowed by the server (orch.guard.allowed-columns). The onMet step is never checked itself.
+# The column must be one the service supports (today: balance_maintained). The onMet step is never checked itself.
 # The check runs just before a contact, so a customer who meets the condition while the workflow waits is thanked at the
 # next contact instead of getting a reminder.
 contactGuard:

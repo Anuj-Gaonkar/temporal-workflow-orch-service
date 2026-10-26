@@ -54,10 +54,6 @@ public class DefinitionLoader {
 	@Value("${orch.timing.day-length:}")
 	private String dayLengthOverride = "";
 
-	/** Columns a {@code contactGuard} may read (comma separated); the same setting limits what the database read will accept. */
-	@Value("${orch.guard.allowed-columns:" + ContactGuard.DEFAULT_COLUMNS + "}")
-	private String guardColumns = ContactGuard.DEFAULT_COLUMNS;
-
 	public DefinitionLoader(@Value("${orch.definitions-path:./workflow-definitions}") String definitionsPath) {
 		this.folder = Path.of(definitionsPath);
 	}
@@ -162,7 +158,7 @@ public class DefinitionLoader {
 		if (def.getCampaign() != null && dayLengthOverride != null && !dayLengthOverride.isBlank()) {
 			def.getCampaign().setDayLength(dayLengthOverride.trim());
 		}
-		List<String> errors = DefinitionValidator.validate(def, OrchActivities.NAMES, ContactGuard.parseColumns(guardColumns));
+		List<String> errors = DefinitionValidator.validate(def, OrchActivities.NAMES);
 		if (!errors.isEmpty()) {
 			throw broken(file, errors);
 		}

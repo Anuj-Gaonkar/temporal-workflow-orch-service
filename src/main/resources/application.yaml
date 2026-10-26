@@ -36,9 +36,6 @@ orch:
     base-url: ${WHATSAPP_FLOWS_BASE_URL:http://localhost:8182}
   # Folder of *.yaml workflow definitions. Read at startup (a broken file stops the app), then rescanned
   # every definitions-reload-seconds (a broken edit is reported and the old version stays live).
-  # Columns of orch.customers that a workflow's contactGuard may read (comma separated). The YAML cannot name any other.
-  guard:
-    allowed-columns: ${ORCH_GUARD_COLUMNS:balance_maintained}
   definitions-path: ${ORCH_DEFINITIONS_PATH:./workflow-definitions}
   definitions-hot-reload: ${ORCH_DEFINITIONS_HOT_RELOAD:true}
   definitions-reload-seconds: ${ORCH_DEFINITIONS_RELOAD_SECONDS:10}

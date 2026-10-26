@@ -7,7 +7,6 @@ import com.hdfc.cern.workfloworch.temporal.activity.OrchActivities;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -42,21 +41,19 @@ class ContactGuardValidationTest {
 	}
 
 	@Test
-	void theColumnMustBeOneTheServerAllows() throws IOException {
-		assertInvalid(valid().replace("column: balance_maintained", "column: wa_id"), "column 'wa_id' is not allowed");
+	void theColumnMustBeOneTheServiceSupports() throws IOException {
+		assertInvalid(valid().replace("column: balance_maintained", "column: wa_id"), "column 'wa_id' is not supported");
 		assertInvalid(valid().replace("  column: balance_maintained\n", ""), "'column' is required");
 	}
 
 	@Test
-	void theAllowedColumnsComeFromTheServerSetting() {
+	void theShippedDefinitionUsesASupportedColumn() {
 		DefinitionLoader loader = new DefinitionLoader("workflow-definitions");
 		loader.load();
 		WorkflowDefinition def = loader.find("OUTREACH_20_DAY").orElseThrow();
 
-		assertThat(DefinitionValidator.validate(def, OrchActivities.NAMES, Set.of("balance_maintained"))).isEmpty();
-		assertThat(DefinitionValidator.validate(def, OrchActivities.NAMES, ContactGuard.parseColumns("kyc_done, loan_repaid")))
-				.anyMatch(e -> e.contains("column 'balance_maintained' is not allowed"));
-		assertThat(ContactGuard.parseColumns(" a, b ,,c ")).containsExactly("a", "b", "c");
+		assertThat(ContactGuard.SUPPORTED_COLUMNS).contains(def.getContactGuard().getColumn());
+		assertThat(DefinitionValidator.validate(def, OrchActivities.NAMES)).isEmpty();
 	}
 
 	@Test

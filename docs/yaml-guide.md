@@ -74,7 +74,7 @@ Just before each `contact` step the workflow reads `column` for that customer fr
 
 - Every contact is checked except the ones in `except` and the `onMet` step itself (so there is no loop). The first contact is normally listed in `except`, so every customer is contacted once. Reminders, Day 20 final notices and so on are checked.
 - The check runs only just before a contact. A customer who meets the condition while the workflow waits is thanked at the next contact instead of getting a reminder; the workflow does not wake up early.
-- `column` must be listed in the server setting `orch.guard.allowed-columns` (default `balance_maintained`, environment variable `ORCH_GUARD_COLUMNS`, comma separated). The YAML cannot name any other column.
+- `column` must be a flag the service supports. Today that is only `balance_maintained`; any other name is rejected when the file is loaded. Each supported column is a field on `CustomerEntity`, so adding one is a code change (the entity field and an entry in `CustomerServiceImpl`), not a setting.
 - The flag is set by another system. This service only reads it (`balance_maintained BOOLEAN NOT NULL DEFAULT false`, see `db/01_schema.sql`; for an existing table run the `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` at the end of that file).
 - If the database cannot be read, the check is retried with growing pauses (at most a minute apart) until it works. The contact is never sent unchecked, and the run does not fail.
 - Logged as `event=WF_GUARD_CHECKED` (`stepId`, `column`, `met`) and, when it fires, `event=WF_CONTACT_SKIPPED` (`reason=GUARD_MET:<column>`, `goTo`).
