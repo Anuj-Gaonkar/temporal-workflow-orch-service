@@ -5,7 +5,7 @@ import static com.hdfc.cern.workfloworch.logging.LogEvents.line;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.hdfc.cern.workfloworch.activity.OrchActivities;
+import com.hdfc.cern.workfloworch.temporal.activity.OrchActivities;
 import com.hdfc.cern.workfloworch.logging.LogEvents;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;

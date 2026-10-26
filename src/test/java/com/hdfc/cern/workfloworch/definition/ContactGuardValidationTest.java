@@ -3,7 +3,7 @@ package com.hdfc.cern.workfloworch.definition;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.hdfc.cern.workfloworch.activity.OrchActivities;
+import com.hdfc.cern.workfloworch.temporal.activity.OrchActivities;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -6,6 +6,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.core.spi.FilterReply;
+import com.hdfc.cern.workfloworch.controller.OrchController;
+import com.hdfc.cern.workfloworch.temporal.workflow.YamlWorkflowImpl;
 import org.junit.jupiter.api.Test;
 
 class CommunicationOnlyFilterTest {
@@ -21,20 +23,20 @@ class CommunicationOnlyFilterTest {
 
 	@Test
 	void offByDefaultEverythingPasses() {
-		assertThat(decide(false, "com.hdfc.cern.workfloworch.api.OrchController", Level.INFO)).isEqualTo(FilterReply.NEUTRAL);
+		assertThat(decide(false, "com.hdfc.cern.workfloworch.controller.OrchController", Level.INFO)).isEqualTo(FilterReply.NEUTRAL);
 		assertThat(decide(false, "org.apache.catalina", Level.DEBUG)).isEqualTo(FilterReply.NEUTRAL);
 	}
 
 	@Test
 	void whenOnOnlyConversationAndProblemsPass() {
 		assertThat(decide(true, ConversationLog.LOGGER, Level.INFO)).isEqualTo(FilterReply.NEUTRAL);
-		assertThat(decide(true, "com.hdfc.cern.workfloworch.workflow.YamlWorkflowImpl", Level.WARN)).isEqualTo(FilterReply.NEUTRAL);
+		assertThat(decide(true, "com.hdfc.cern.workfloworch.temporal.workflow.YamlWorkflowImpl", Level.WARN)).isEqualTo(FilterReply.NEUTRAL);
 		assertThat(decide(true, "org.springframework.boot", Level.ERROR)).isEqualTo(FilterReply.NEUTRAL);
 	}
 
 	@Test
 	void whenOnTimingLinesAndFrameworkInfoAreHidden() {
-		assertThat(decide(true, "com.hdfc.cern.workfloworch.workflow.YamlWorkflowImpl", Level.INFO)).isEqualTo(FilterReply.DENY);
+		assertThat(decide(true, "com.hdfc.cern.workfloworch.temporal.workflow.YamlWorkflowImpl", Level.INFO)).isEqualTo(FilterReply.DENY);
 		assertThat(decide(true, "org.apache.catalina.core.StandardService", Level.INFO)).isEqualTo(FilterReply.DENY);
 		assertThat(decide(true, "io.temporal.internal.worker", Level.DEBUG)).isEqualTo(FilterReply.DENY);
 	}

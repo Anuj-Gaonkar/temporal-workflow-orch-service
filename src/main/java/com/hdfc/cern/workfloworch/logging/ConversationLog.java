@@ -1,5 +1,6 @@
 package com.hdfc.cern.workfloworch.logging;
 
+import com.hdfc.cern.workfloworch.model.Customer;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;

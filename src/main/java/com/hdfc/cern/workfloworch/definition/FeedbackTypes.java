@@ -1,5 +1,6 @@
 package com.hdfc.cern.workfloworch.definition;
 
+import com.hdfc.cern.workfloworch.model.Customer;
 import java.util.Set;
 
 /** The four kinds of customer feedback a workflow routes on (value of {@code feedback.type}). */

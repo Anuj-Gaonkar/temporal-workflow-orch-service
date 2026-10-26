@@ -1,6 +1,6 @@
 package com.hdfc.cern.workfloworch.definition;
 
-import com.hdfc.cern.workfloworch.customer.Customer;
+import com.hdfc.cern.workfloworch.model.Customer;
 import java.util.Map;
 import java.util.Set;
 

@@ -2,6 +2,7 @@ package com.hdfc.cern.workfloworch.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.hdfc.cern.workfloworch.model.Customer;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import org.junit.jupiter.api.Test;
